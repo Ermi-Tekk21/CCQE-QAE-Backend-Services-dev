@@ -24,7 +24,7 @@ export class AgentEvaluation {
     })
     status: agentEvalStatus
 
-    @Column()
+    @Column({default: false})
     is_deleted: boolean
 
     @Column({ type: "uuid" })
@@ -36,7 +36,7 @@ export class AgentEvaluation {
     @CreateDateColumn()
     created_at: Date
 
-    @CreateDateColumn()
+    @Column({ type: "timestamp", nullable: true })
     deleted_at: Date;
 
     @ManyToOne(()=> GroupQuestion, (group_question)=> group_question.agent_evaluation)

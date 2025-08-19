@@ -8,21 +8,19 @@ export class EvalPerQuestion {
     @PrimaryGeneratedColumn("uuid")
     id: string
 
-    @Column()
+    @Column({default: false})
     is_deleted: boolean
 
-    @CreateDateColumn()
     @Column({ type: "uuid" })
     created_by: string
 
-    @CreateDateColumn()
-    @Column({ type: "uuid" })
+    @Column({ type: "uuid", nullable: true })
     deleted_by: string;
 
     @CreateDateColumn()
     created_at: Date
 
-    @CreateDateColumn()
+    @Column({ type: "timestamp", nullable: true })
     deleted_at: Date;
 
     // relationship

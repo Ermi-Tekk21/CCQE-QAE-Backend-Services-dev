@@ -3,6 +3,7 @@ import { QuestionLookup } from "./lookups/question_lookup.entity"
 import { Catagory } from "./catagory.entity"
 import { GroupQuestion } from "./group_question.entity"
 import { EvalPerQuestion } from "src/evaluation/entities/evaluationPerQuestion.entity"
+import { QuestionAnswerOp } from "./question_answerOP.entity"
 
 @Entity('question')
 export class Question {
@@ -18,18 +19,16 @@ export class Question {
     @Column()
     is_deleted: boolean
 
-    @CreateDateColumn()
     @Column({ type: "uuid" })
     created_by: string
 
-    @CreateDateColumn()
-    @Column({ type: "uuid" })
+    @Column({ type: "uuid", nullable: true })
     deleted_by: string;
 
     @CreateDateColumn()
     created_at: Date
 
-    @CreateDateColumn()
+    @Column({ type: "timestamp", nullable: true })
     deleted_at: Date;
 
     //relationship
@@ -44,4 +43,7 @@ export class Question {
 
     @OneToMany(() => EvalPerQuestion, (eval_per_question) => eval_per_question.question)
     eval_per_question: EvalPerQuestion[]
+
+    @OneToMany(() => QuestionAnswerOp, (questionAnswerOp) => questionAnswerOp.question)
+    question_answer_ops: QuestionAnswerOp[]
 }

@@ -14,22 +14,20 @@ export class QuestionAnswerOp {
     @Column()
     is_deleted: boolean
 
-    @CreateDateColumn()
     @Column({ type: "uuid" })
     created_by: string
 
-    @CreateDateColumn()
-    @Column({ type: "uuid" })
+    @Column({ type: "uuid", nullable: true })
     deleted_by: string;
 
     @CreateDateColumn()
     created_at: Date
 
-    @CreateDateColumn()
+    @Column({ type: "timestamp", nullable: true })
     deleted_at: Date;
 
     //relationship
-    @ManyToOne(() => Question, (question) => question.id)
+    @ManyToOne(() => Question, (question) => question.question_answer_ops)
     question: Question
 
     @ManyToOne(() => AnswerOplookup, (answer_option) => answer_option.question_answerOP)
