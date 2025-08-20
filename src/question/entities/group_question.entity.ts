@@ -21,7 +21,7 @@ export class GroupQuestion {
     })
     status: groupQuestionStatus
 
-    @Column()
+    @Column({default: false})
     is_deleted: boolean
 
     @Column()

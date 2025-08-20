@@ -11,7 +11,7 @@ export class QuestionAnswerOp {
     @Column()
     weight: number
 
-    @Column()
+    @Column({default: false})
     is_deleted: boolean
 
     @Column({ type: "uuid" })
