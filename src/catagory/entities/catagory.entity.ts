@@ -1,0 +1,30 @@
+import { Question } from "src/question/entities/question.entity";
+import { Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn } from "typeorm";
+
+@Entity("catagory")
+export class Catagory {
+    @PrimaryGeneratedColumn("uuid")
+    id: string
+
+    @Column()
+    name: string
+
+    @Column({default: false})
+    is_deleted: boolean
+
+    @Column({ type: "uuid" })
+    created_by: string
+
+    @Column({ type: "uuid", nullable: true })
+    deleted_by: string;
+
+    @CreateDateColumn()
+    created_at: Date
+
+    @Column({ type: "timestamp", nullable: true })
+    deleted_at: Date;
+
+    //relationship
+    @OneToMany(() => Question, (question) => question.catagory)
+    question: Question[]
+}
