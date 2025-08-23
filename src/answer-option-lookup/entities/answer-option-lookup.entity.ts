@@ -1,8 +1,8 @@
 import { Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn } from "typeorm";
-import { QuestionAnswerOp } from "../question_answerOP.entity";
+import { QuestionAnswerOp } from "src/question/entities/question_answerOP.entity";
 
-@Entity("answerOP_lookup")
-export class AnswerOplookup {
+@Entity("answer_option_lookup")
+export class AnswerOptionLookup {
     @PrimaryGeneratedColumn("uuid")
     id: string
 

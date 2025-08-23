@@ -1,6 +1,6 @@
 import { groupQuestionStatus } from "src/common/group_question.status";
 import { Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn } from "typeorm"
-import { Question } from "./question.entity";
+import { Question } from "src/question/entities/question.entity";
 import { AgentEvaluation } from "src/evaluation/entities/evaluation.entity";
 
 @Entity('group_question')
@@ -8,7 +8,7 @@ export class GroupQuestion {
     @PrimaryGeneratedColumn('uuid')
     id: string
 
-    @Column({ unique: true, type: 'float' })
+    @Column({ unique: true, type: 'float'})
     version: number;
 
     @Column({ default: 100 })

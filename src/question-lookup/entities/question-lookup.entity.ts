@@ -1,5 +1,5 @@
 import { Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn } from "typeorm";
-import { Question } from "../question.entity";
+import { Question } from "src/question/entities/question.entity";
 
 @Entity("question_lookup")
 export class QuestionLookup {
@@ -9,7 +9,7 @@ export class QuestionLookup {
     @Column({ type: "text" })
     content: string
 
-    @Column({default: false})
+    @Column({ default: false })
     is_deleted: boolean
 
     @Column({ type: "uuid" })

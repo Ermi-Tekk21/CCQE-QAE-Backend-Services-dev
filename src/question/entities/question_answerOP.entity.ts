@@ -1,9 +1,9 @@
 import { Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn, ManyToOne } from "typeorm";
-import { AnswerOplookup } from "./lookups/answerOP_lookup.entity";
+import { AnswerOptionLookup } from "src/answer-option-lookup/entities/answer-option-lookup.entity";
 import { Question } from "./question.entity";
 import { EvalPerQuestion } from "src/evaluation/entities/evaluationPerQuestion.entity";
 
-@Entity("question_answerOp")
+@Entity("question_and_answer_option")
 export class QuestionAnswerOp {
     @PrimaryGeneratedColumn("uuid")
     id: string
@@ -30,8 +30,8 @@ export class QuestionAnswerOp {
     @ManyToOne(() => Question, (question) => question.question_answer_ops)
     question: Question
 
-    @ManyToOne(() => AnswerOplookup, (answer_option) => answer_option.question_answer_option)
-    answer_option_lookup: AnswerOplookup
+    @ManyToOne(() => AnswerOptionLookup, (answer_option) => answer_option.question_answer_option)
+    answer_option_lookup: AnswerOptionLookup
 
     @OneToMany(() => EvalPerQuestion, (eval_per_question) => eval_per_question.question_answerOP)
     eval_per_question: EvalPerQuestion[]

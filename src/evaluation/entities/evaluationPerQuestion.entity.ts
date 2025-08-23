@@ -24,7 +24,6 @@ export class EvalPerQuestion {
     deleted_at: Date;
 
     // relationship
-
     @ManyToOne(() => EvalPerAudio, (eval_per_audio) => eval_per_audio.eval_per_question)
     eval_per_audio: EvalPerAudio
 

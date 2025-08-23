@@ -6,12 +6,20 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { QuestionModule } from './question/question.module';
 import { EvaluationModule } from './evaluation/evaluation.module';
 import { typeOrmConfig } from './common/config/datasource';
+import { CatagoryModule } from './catagory/catagory.module';
+import { AnswerOptionLookupModule } from './answer-option-lookup/answer-option-lookup.module';
+import { QuestionLookupModule } from './question-lookup/question-lookup.module';
+import { GroupQuestionModule } from './group-question/group-question.module';
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true }),
     TypeOrmModule.forRoot(typeOrmConfig),
     QuestionModule,
-    EvaluationModule
+    EvaluationModule,
+    CatagoryModule,
+    AnswerOptionLookupModule,
+    QuestionLookupModule,
+    GroupQuestionModule
   ],
   controllers: [AppController],
   providers: [AppService],

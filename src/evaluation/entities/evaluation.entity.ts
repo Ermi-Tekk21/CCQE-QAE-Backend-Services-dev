@@ -1,5 +1,5 @@
 import { agentEvalStatus } from "src/common/agent_evaluation.status";
-import { GroupQuestion } from "src/question/entities/group_question.entity";
+import { GroupQuestion } from "src/group-question/entities/group-question.entity";
 import { Column, CreateDateColumn, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm";
 import { EvalPerAudio } from "./evaluationPerAudio.entity";
 

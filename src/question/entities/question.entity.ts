@@ -1,7 +1,7 @@
 import { Column, CreateDateColumn, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm"
-import { QuestionLookup } from "./lookups/question_lookup.entity"
-import { Catagory } from "./catagory.entity"
-import { GroupQuestion } from "./group_question.entity"
+import { QuestionLookup } from "src/question-lookup/entities/question-lookup.entity"
+import { Catagory } from "src/catagory/entities/catagory.entity"
+import { GroupQuestion } from "src/group-question/entities/group-question.entity"
 import { EvalPerQuestion } from "src/evaluation/entities/evaluationPerQuestion.entity"
 import { QuestionAnswerOp } from "./question_answerOP.entity"
 

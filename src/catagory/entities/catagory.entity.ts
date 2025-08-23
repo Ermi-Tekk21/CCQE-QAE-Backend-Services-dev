@@ -1,5 +1,5 @@
+import { Question } from "src/question/entities/question.entity";
 import { Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn } from "typeorm";
-import { Question } from "./question.entity";
 
 @Entity("catagory")
 export class Catagory {
