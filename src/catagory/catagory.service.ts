@@ -1,26 +1,75 @@
-import { Injectable } from '@nestjs/common';
+import { HttpException, Injectable } from '@nestjs/common';
 import { CreateCatagoryDto } from './dto/create-catagory.dto';
 import { UpdateCatagoryDto } from './dto/update-catagory.dto';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Catagory } from './entities/catagory.entity';
+import { Repository } from 'typeorm';
+import { error } from 'console';
 
 @Injectable()
 export class CatagoryService {
-  create(createCatagoryDto: CreateCatagoryDto) {
-    return 'This action adds a new catagory';
+  constructor(
+    @InjectRepository(Catagory)
+    private readonly catagoryRepo: Repository<Catagory>
+  ) { }
+
+  async create(createCatagoryDto: CreateCatagoryDto) {
+    try {
+      const catagory = this.catagoryRepo.create(createCatagoryDto)
+      // catagory.created_by = "5fdcf88e-4ad1-4dd5-b257-de76aac8aab1" // request ums service for active session and fetch user_id
+      await this.catagoryRepo.save(catagory)
+      return { message: "Catagory successfully created", catagory }
+    } catch (error) {
+      console.error(error)
+      throw new HttpException('Failed to create category', 500)
+    }
   }
 
-  findAll() {
-    return `This action returns all catagory`;
+  async findAll() {
+    try {
+      return await this.catagoryRepo.find()
+    } catch {
+      throw new HttpException("somthing bad happend", 500)
+    }
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} catagory`;
+  async findOne(id: string) {
+    try {
+      const catagory = await this.catagoryRepo.findOne({ where: { id: id } })
+      if (!catagory) {
+        throw new HttpException(`catagory with this ${id} not found.`, 404)
+      }
+      return { message: "" };
+    } catch {
+      console.error(error)
+      throw new HttpException("somthing bad happend", 500)
+    }
   }
 
-  update(id: number, updateCatagoryDto: UpdateCatagoryDto) {
-    return `This action updates a #${id} catagory`;
+  async update(id: string, updateCatagoryDto: UpdateCatagoryDto) {
+    try {
+      const catagory = await this.catagoryRepo.findOne({ where: { id } })
+      if (!catagory) {
+        throw new HttpException(`catagory with this ${id} not found.`, 404)
+      }
+      const updated = this.catagoryRepo.merge(catagory, updateCatagoryDto)
+      updated.updated_at = new Date()
+      await this.catagoryRepo.save(updated);
+
+      return { message: "Catagory updated successfully", updated }
+    }
+    catch (error) {
+      console.error(error)
+    }
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} catagory`;
+  async remove(id: string) {
+    try {
+      await this.findOne(id)
+      await this.catagoryRepo.delete(id)
+      return { message: "Category successfully deleted" }
+    } catch (error) {
+      throw new HttpException('Failed to delete catagory', error.status);
+    }
   }
 }
