@@ -104,6 +104,7 @@ export class CatagoryService {
         throw new BadRequestException("restored or non-deleted catagory")
       }
       catagory.is_deleted = false
+      catagory.deleted_at = null
       await this.catagoryRepo.save(catagory)
       return { message: "Catagory is restored successfully", catagory }
     } catch (error) {

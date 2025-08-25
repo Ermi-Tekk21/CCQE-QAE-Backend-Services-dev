@@ -28,7 +28,7 @@ export class Catagory {
     updated_at: Date
 
     @Column({ type: "timestamp", nullable: true })
-    deleted_at: Date;
+    deleted_at: Date | null;
 
     //relationship
     @OneToMany(() => Question, (question) => question.catagory)
