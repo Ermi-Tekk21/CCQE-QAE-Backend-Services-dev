@@ -27,6 +27,16 @@ export class CatagoryController {
     return this.catagoryService.update(id, updateCatagoryDto);
   }
 
+  @Patch('temp-delete/:id')
+  softDelete(@Param('id') id: string) {
+    return this.catagoryService.softDelete(id);
+  }
+
+  @Patch('restore-temp-delete/:id')
+  restoreSoftDelete(@Param('id') id: string) {
+    return this.catagoryService.restoreSoftDelete(id);
+  }
+
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.catagoryService.remove(id);

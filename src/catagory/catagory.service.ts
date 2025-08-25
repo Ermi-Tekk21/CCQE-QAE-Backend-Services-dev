@@ -1,10 +1,10 @@
-import { HttpException, Injectable } from '@nestjs/common';
+import { HttpException, Injectable, NotFoundException } from '@nestjs/common';
 import { CreateCatagoryDto } from './dto/create-catagory.dto';
 import { UpdateCatagoryDto } from './dto/update-catagory.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Catagory } from './entities/catagory.entity';
 import { Repository } from 'typeorm';
-import { error } from 'console';
+import { BadRequestException, InternalServerErrorException } from "@nestjs/common";
 
 @Injectable()
 export class CatagoryService {
@@ -15,13 +15,18 @@ export class CatagoryService {
 
   async create(createCatagoryDto: CreateCatagoryDto) {
     try {
+      const doesExist = await this.catagoryRepo.findOne({ where: { name: createCatagoryDto.name } })
+      if (doesExist) {
+        throw new HttpException("duplicate entry", 400)
+      }
       const catagory = this.catagoryRepo.create(createCatagoryDto)
-      // catagory.created_by = "5fdcf88e-4ad1-4dd5-b257-de76aac8aab1" // request ums service for active session and fetch user_id
       await this.catagoryRepo.save(catagory)
       return { message: "Catagory successfully created", catagory }
     } catch (error) {
-      console.error(error)
-      throw new HttpException('Failed to create category', 500)
+      if (error instanceof HttpException) {
+        throw error
+      }
+      throw new InternalServerErrorException("Error occured during creating catagory")
     }
   }
 
@@ -29,7 +34,7 @@ export class CatagoryService {
     try {
       return await this.catagoryRepo.find()
     } catch {
-      throw new HttpException("somthing bad happend", 500)
+      throw new InternalServerErrorException("somthing bad happend")
     }
   }
 
@@ -37,29 +42,75 @@ export class CatagoryService {
     try {
       const catagory = await this.catagoryRepo.findOne({ where: { id: id } })
       if (!catagory) {
-        throw new HttpException(`catagory with this ${id} not found.`, 404)
+        throw new NotFoundException("Category not found")
       }
-      return { message: "" };
-    } catch {
-      console.error(error)
-      throw new HttpException("somthing bad happend", 500)
+      return catagory;
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error
+      }
+      throw new InternalServerErrorException("Error occurred during soft deletion");
     }
   }
 
   async update(id: string, updateCatagoryDto: UpdateCatagoryDto) {
     try {
-      const catagory = await this.catagoryRepo.findOne({ where: { id } })
-      if (!catagory) {
-        throw new HttpException(`catagory with this ${id} not found.`, 404)
-      }
+      const catagory = await this.findOne(id)
       const updated = this.catagoryRepo.merge(catagory, updateCatagoryDto)
+
       updated.updated_at = new Date()
+
       await this.catagoryRepo.save(updated);
 
       return { message: "Catagory updated successfully", updated }
     }
     catch (error) {
-      console.error(error)
+      if (error instanceof BadRequestException || error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException("Error occured during updeting catagories")
+    }
+  }
+
+  async softDelete(id: string) {
+    try {
+      const category = await this.findOne(id);
+
+      if (category.is_deleted) {
+        throw new BadRequestException("Category is already deleted");
+      }
+
+      category.is_deleted = true;
+      category.deleted_at = new Date();
+
+      await this.catagoryRepo.save(category);
+
+      return {
+        message: "Category soft-deleted successfully",
+        category,
+      };
+    } catch (error) {
+      if (error instanceof BadRequestException || error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException("Error occurred during soft deletion");
+    }
+  }
+
+  async restoreSoftDelete(id: string) {
+    try {
+      const catagory = await this.findOne(id)
+      if (!catagory.is_deleted) {
+        throw new BadRequestException("restored or non-deleted catagory")
+      }
+      catagory.is_deleted = false
+      await this.catagoryRepo.save(catagory)
+      return { message: "Catagory is restored successfully", catagory }
+    } catch (error) {
+      if (error instanceof BadRequestException || error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new HttpException("error happend during soft deletion", 500)
     }
   }
 
@@ -69,6 +120,7 @@ export class CatagoryService {
       await this.catagoryRepo.delete(id)
       return { message: "Category successfully deleted" }
     } catch (error) {
+      if (error instanceof NotFoundException) { throw error }
       throw new HttpException('Failed to delete catagory', error.status);
     }
   }
