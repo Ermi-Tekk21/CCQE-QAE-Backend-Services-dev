@@ -12,23 +12,33 @@ export class QuestionLookupController {
     return this.questionLookupService.create(createQuestionLookupDto);
   }
 
-  @Get()
+  @Get('fetch-all')
   findAll() {
     return this.questionLookupService.findAll();
   }
 
   @Get(':id')
   findOne(@Param('id') id: string) {
-    return this.questionLookupService.findOne(+id);
+    return this.questionLookupService.findOne(id);
   }
 
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateQuestionLookupDto: UpdateQuestionLookupDto) {
-    return this.questionLookupService.update(+id, updateQuestionLookupDto);
+    return this.questionLookupService.update(id, updateQuestionLookupDto);
+  }
+
+    @Patch('temp-delete/:id')
+  softDelete(@Param('id') id: string) {
+    return this.questionLookupService.softDelete(id);
+  }
+
+  @Patch('restore-temp-delete/:id')
+  restoreSoftDelete(@Param('id') id: string) {
+    return this.questionLookupService.restoreSoftDelete(id);
   }
 
   @Delete(':id')
   remove(@Param('id') id: string) {
-    return this.questionLookupService.remove(+id);
+    return this.questionLookupService.remove(id);
   }
 }

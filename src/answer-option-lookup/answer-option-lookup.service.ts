@@ -115,7 +115,7 @@ export class AnswerOptionLookupService {
     try {
       await this.findOne(id)
       await this.answerOptionLookupRepo.delete(id)
-      return { message: "Category successfully deleted" }
+      return { message: "answer option lookup successfully deleted" }
     } catch (error) {
       if (error instanceof NotFoundException) { throw error }
       throw new HttpException('Failed to delete answer option lookup', error.status);
