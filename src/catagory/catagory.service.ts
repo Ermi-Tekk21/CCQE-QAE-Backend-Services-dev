@@ -49,7 +49,7 @@ export class CatagoryService {
       if (error instanceof NotFoundException) {
         throw error
       }
-      throw new InternalServerErrorException("Error occurred during soft deletion");
+      throw new InternalServerErrorException("Error occurred during looking for specified catagory");
     }
   }
 
@@ -65,7 +65,7 @@ export class CatagoryService {
       return { message: "Catagory updated successfully", updated }
     }
     catch (error) {
-      if (error instanceof BadRequestException || error instanceof NotFoundException) {
+      if (error instanceof NotFoundException) {
         throw error;
       }
       throw new InternalServerErrorException("Error occured during updeting catagories")
@@ -111,7 +111,7 @@ export class CatagoryService {
       if (error instanceof BadRequestException || error instanceof NotFoundException) {
         throw error;
       }
-      throw new HttpException("error happend during soft deletion", 500)
+      throw new HttpException("error happend during restoring soft delete", 500)
     }
   }
 

@@ -12,23 +12,33 @@ export class AnswerOptionLookupController {
     return this.answerOptionLookupService.create(createAnswerOptionLookupDto);
   }
 
-  @Get()
+  @Get('fetch-all')
   findAll() {
     return this.answerOptionLookupService.findAll();
   }
 
   @Get(':id')
   findOne(@Param('id') id: string) {
-    return this.answerOptionLookupService.findOne(+id);
+    return this.answerOptionLookupService.findOne(id);
   }
 
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateAnswerOptionLookupDto: UpdateAnswerOptionLookupDto) {
-    return this.answerOptionLookupService.update(+id, updateAnswerOptionLookupDto);
+    return this.answerOptionLookupService.update(id, updateAnswerOptionLookupDto);
+  }
+
+  @Patch('temp-delete/:id')
+  softDelete(@Param('id') id: string) {
+    return this.answerOptionLookupService.softDelete(id);
+  }
+
+  @Patch('restore-temp-delete/:id')
+  restoreSoftDelete(@Param('id') id: string) {
+    return this.answerOptionLookupService.restoreSoftDelete(id);
   }
 
   @Delete(':id')
   remove(@Param('id') id: string) {
-    return this.answerOptionLookupService.remove(+id);
+    return this.answerOptionLookupService.remove(id);
   }
 }

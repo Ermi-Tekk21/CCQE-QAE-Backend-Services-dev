@@ -12,8 +12,11 @@ export class QuestionLookup {
     @Column({ default: false })
     is_deleted: boolean
 
-    @Column({ type: "uuid" })
+    @Column({ type: "uuid", nullable: true })
     created_by: string
+
+    @Column({ type: "uuid", nullable: true })
+    updated_by: string;
 
     @Column({ type: "uuid", nullable: true })
     deleted_by: string;
@@ -21,8 +24,11 @@ export class QuestionLookup {
     @CreateDateColumn()
     created_at: Date
 
+    @Column({ type: "timestamp", nullable: true, default: null })
+    updated_at: Date
+
     @Column({ type: "timestamp", nullable: true })
-    deleted_at: Date;
+    deleted_at: Date | null;
 
     //relationship
     @OneToMany(() => Question, (question) => question.question_lookup)
