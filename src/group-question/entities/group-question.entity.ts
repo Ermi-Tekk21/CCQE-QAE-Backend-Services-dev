@@ -9,6 +9,9 @@ export class GroupQuestion {
     @PrimaryGeneratedColumn('uuid')
     id: string
 
+    @Column({unique: true, })
+    name: string
+
     @Column({ unique: true, nullable: true })
     version: string;
 
@@ -25,13 +28,13 @@ export class GroupQuestion {
     @Column({ default: false })
     is_deleted: boolean
 
-    @Column()
+    @Column({default: false})
     is_active: boolean
 
-    @Column({ type: "timestamp", nullable: true })
-    evaluation_ends_at: Date | null
+    @Column({ type: "timestamp", nullable: true})
+    evaluation_ends_at: Date
 
-    @Column({ type: "uuid" })
+    @Column({ type: "uuid", nullable: true})
     created_by: string
 
     @Column({ type: "uuid", nullable: true })
@@ -57,7 +60,7 @@ export class GroupQuestion {
     agent_evaluation: AgentEvaluation[]
 
     @ManyToOne(() => GroupQuestion, (groupQuestion) => groupQuestion.id)
-    parent: GroupQuestion
+    parent: GroupQuestion | null
 
     @OneToMany(() => VersionChangesDetail, (versionChangesDetail) => versionChangesDetail.group_question)
     version_changes_detail: VersionChangesDetail[]

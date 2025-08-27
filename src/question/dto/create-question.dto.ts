@@ -1,9 +1,19 @@
-import { IsNumber, IsString } from "class-validator";
+import { Type } from 'class-transformer';
+import { IsString, IsInt, Min, IsUUID, IsBoolean, IsOptional, IsArray } from 'class-validator';
+import { CreateQuestionAnswerOPDto } from './question_answerOP/create-question_answerOP.dto';
 
 export class CreateQuestionDto {
     @IsString()
-    content: string
+    content: string;
 
-    @IsNumber()
-    weight: number
+    @IsInt()
+    @Min(0)
+    weight: number;
+
+    @IsUUID()
+    catagoryId: string;
+
+    @IsArray()
+    @Type(() => CreateQuestionAnswerOPDto)
+    question_answerOP: CreateQuestionAnswerOPDto[];
 }
