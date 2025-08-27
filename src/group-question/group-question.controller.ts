@@ -19,7 +19,7 @@ export class GroupQuestionController {
 
   @Get(':id')
   findOne(@Param('id') id: string) {
-    return this.groupQuestionService.findOne(+id);
+    return this.groupQuestionService.findOne(id);
   }
 
   @Patch(':id')
@@ -27,8 +27,13 @@ export class GroupQuestionController {
     return this.groupQuestionService.update(+id, updateGroupQuestionDto);
   }
 
+  @Patch('publish/:id')
+  publish(@Param('id') id: string){
+    return this.groupQuestionService.publish(id);
+  }
+
   @Delete(':id')
   remove(@Param('id') id: string) {
-    return this.groupQuestionService.remove(+id);
+    return this.groupQuestionService.remove(id);
   }
 }

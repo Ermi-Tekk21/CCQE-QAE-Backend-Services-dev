@@ -1,4 +1,4 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { groupQuestionStatus } from 'src/common/group_question.status';
 import { DataSource, EntityManager } from 'typeorm';
 import { Question } from 'src/question/entities/question.entity';
@@ -15,6 +15,7 @@ import { CreateGroupQuestionDto } from './dto/create-group-question.dto';
 export class GroupQuestionService {
   constructor(
     private readonly dataSource: DataSource,
+    private readonly entityManager: EntityManager,
   ) { }
 
   async create(createGroupQuestionDto: CreateGroupQuestionDto) {
@@ -54,12 +55,18 @@ export class GroupQuestionService {
 
       const group_question = entityManager.create(GroupQuestion, createGroupQuestionDto);
       group_question.name = groupQuestionName;
-      group_question.is_active = true;
       group_question.status = groupQuestionStatus.DRAFT;
-      group_question.weight = group_question.weight || 100;
       group_question.created_by = createdByUserId;
       group_question.evaluation_ends_at = createGroupQuestionDto.evaluation_ends_at;
       group_question.version = '1.0';
+
+      let sumOfQuestionWeights = 0;
+      if (createGroupQuestionDto.questions && createGroupQuestionDto.questions.length > 0) {
+        for (const queData of createGroupQuestionDto.questions) {
+          sumOfQuestionWeights += queData.weight;
+        }
+      }
+      group_question.weight = sumOfQuestionWeights;
 
       if (createGroupQuestionDto.parentId) {
         const parent = await entityManager.findOne(GroupQuestion, {
@@ -234,19 +241,119 @@ export class GroupQuestionService {
     }
   }
 
-  findAll() {
-    return `This action returns all groupQuestion`;
+  async findAll(): Promise<GroupQuestion[]> {
+    try {
+      // Direct use of dataSource.manager for read-only operation outside a specific transaction
+      return await this.dataSource.manager.find(GroupQuestion, {
+        relations: ['question', 'question.question_answer_ops']
+      });
+    } catch (error) {
+      console.error('Error finding all group questions:', error);
+      throw new InternalServerErrorException('Failed to retrieve group questions.');
+    }
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} groupQuestion`;
+
+  async findOne(id: string): Promise<GroupQuestion | null> {
+    try {
+      // Direct use of dataSource.manager for read-only operation outside a specific transaction
+      const gQue = await this.dataSource.manager.findOne(GroupQuestion, {
+        where: { id: id },
+        relations: ['question', 'question.question_answer_ops', 'question.question_answer_ops.answer_option_lookup'], // Added lookup for completeness
+      });
+      if (!gQue) {
+        throw new NotFoundException(`Group question with ID "${id}" not found.`); // More specific message
+      }
+      return gQue;
+    } catch (error) {
+      // Re-throw NotFoundException directly
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      console.error('Error occurred during finding group question:', error);
+      throw new InternalServerErrorException("Error occurred during finding group question");
+    }
   }
 
   update(id: number, updateGroupQuestionDto: UpdateGroupQuestionDto) {
     return `This action updates a #${id} groupQuestion`;
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} groupQuestion`;
+  async publish(id: string) {
+    const queryRunner = this.dataSource.createQueryRunner(); // Get query runner for transaction
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    const entityManager = queryRunner.manager;
+
+    try {
+      const gQue = await entityManager.findOne(GroupQuestion, { where: { id } });
+
+      if (!gQue) {
+        throw new NotFoundException(`Group question with ID "${id}" not found.`);
+      }
+
+      if (gQue.weight === 100) {
+        gQue.is_active = true;
+        await entityManager.save(GroupQuestion, gQue);
+        await queryRunner.commitTransaction(); // Commit the transaction on success
+        return { message: `Group question "${gQue.name}" published successfully.`, group_question: gQue };
+      } else if (gQue.weight < 100) {
+        throw new HttpException(
+          `Group question weight is ${gQue.weight}, which is less than 100. It cannot be published.`,
+          HttpStatus.BAD_REQUEST,
+        );
+      } else { // gQue.weight > 100
+        throw new HttpException(
+          `Group question weight is ${gQue.weight}, which is more than 100. It cannot be published.`,
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+    } catch (error) {
+      await queryRunner.rollbackTransaction(); // Rollback on error
+      console.error('Error publishing group question:', error);
+      if (error instanceof NotFoundException || error instanceof HttpException) {
+        throw error;
+      }
+      // Provide a generic, relevant error message for unexpected errors
+      throw new HttpException(
+        'Failed to publish group question due to an unexpected error.',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    } finally {
+      await queryRunner.release(); // Always release the query runner
+    }
+  }
+
+  async remove(id: string) {
+    const queryRunner = this.dataSource.createQueryRunner(); // Get query runner for transaction
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    const entityManager = queryRunner.manager;
+
+    try {
+      const gQue = await entityManager.findOne(GroupQuestion, { where: { id } });
+
+      if (!gQue) {
+        throw new NotFoundException(`Group question with ID "${id}" not found.`);
+      }
+
+      await entityManager.remove(GroupQuestion, gQue); // Use entityManager.remove with the entity object
+      await queryRunner.commitTransaction(); // Commit the transaction on success
+
+      return { message: `Group question "${gQue.name}" removed successfully.` };
+    } catch (error) {
+      await queryRunner.rollbackTransaction(); // Rollback on error
+      console.error('Error removing group question:', error);
+      if (error instanceof NotFoundException || error instanceof HttpException) {
+        throw error;
+      }
+      // Provide a generic, relevant error message for unexpected errors
+      throw new HttpException(
+        'Failed to remove group question due to an unexpected error.',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    } finally {
+      await queryRunner.release(); // Always release the query runner
+    }
   }
 }
