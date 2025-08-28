@@ -243,7 +243,6 @@ export class GroupQuestionService {
 
   async findAll(): Promise<GroupQuestion[]> {
     try {
-      // Direct use of dataSource.manager for read-only operation outside a specific transaction
       return await this.dataSource.manager.find(GroupQuestion, {
         relations: ['question', 'question.question_answer_ops']
       });
@@ -256,7 +255,6 @@ export class GroupQuestionService {
 
   async findOne(id: string): Promise<GroupQuestion | null> {
     try {
-      // Direct use of dataSource.manager for read-only operation outside a specific transaction
       const gQue = await this.dataSource.manager.findOne(GroupQuestion, {
         where: { id: id },
         relations: ['question', 'question.question_answer_ops', 'question.question_answer_ops.answer_option_lookup'], // Added lookup for completeness
@@ -266,7 +264,6 @@ export class GroupQuestionService {
       }
       return gQue;
     } catch (error) {
-      // Re-throw NotFoundException directly
       if (error instanceof NotFoundException) {
         throw error;
       }
@@ -280,7 +277,7 @@ export class GroupQuestionService {
   }
 
   async publish(id: string) {
-    const queryRunner = this.dataSource.createQueryRunner(); // Get query runner for transaction
+    const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
     const entityManager = queryRunner.manager;
@@ -295,14 +292,14 @@ export class GroupQuestionService {
       if (gQue.weight === 100) {
         gQue.is_active = true;
         await entityManager.save(GroupQuestion, gQue);
-        await queryRunner.commitTransaction(); // Commit the transaction on success
+        await queryRunner.commitTransaction();
         return { message: `Group question "${gQue.name}" published successfully.`, group_question: gQue };
       } else if (gQue.weight < 100) {
         throw new HttpException(
           `Group question weight is ${gQue.weight}, which is less than 100. It cannot be published.`,
           HttpStatus.BAD_REQUEST,
         );
-      } else { // gQue.weight > 100
+      } else {
         throw new HttpException(
           `Group question weight is ${gQue.weight}, which is more than 100. It cannot be published.`,
           HttpStatus.BAD_REQUEST,
@@ -314,18 +311,18 @@ export class GroupQuestionService {
       if (error instanceof NotFoundException || error instanceof HttpException) {
         throw error;
       }
-      // Provide a generic, relevant error message for unexpected errors
+     
       throw new HttpException(
         'Failed to publish group question due to an unexpected error.',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     } finally {
-      await queryRunner.release(); // Always release the query runner
+      await queryRunner.release();
     }
   }
 
   async remove(id: string) {
-    const queryRunner = this.dataSource.createQueryRunner(); // Get query runner for transaction
+    const queryRunner = this.dataSource.createQueryRunner(); 
     await queryRunner.connect();
     await queryRunner.startTransaction();
     const entityManager = queryRunner.manager;
@@ -337,23 +334,23 @@ export class GroupQuestionService {
         throw new NotFoundException(`Group question with ID "${id}" not found.`);
       }
 
-      await entityManager.remove(GroupQuestion, gQue); // Use entityManager.remove with the entity object
-      await queryRunner.commitTransaction(); // Commit the transaction on success
+      await entityManager.remove(GroupQuestion, gQue); 
+      await queryRunner.commitTransaction();
 
       return { message: `Group question "${gQue.name}" removed successfully.` };
     } catch (error) {
-      await queryRunner.rollbackTransaction(); // Rollback on error
+      await queryRunner.rollbackTransaction();
       console.error('Error removing group question:', error);
       if (error instanceof NotFoundException || error instanceof HttpException) {
         throw error;
       }
-      // Provide a generic, relevant error message for unexpected errors
+      
       throw new HttpException(
         'Failed to remove group question due to an unexpected error.',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     } finally {
-      await queryRunner.release(); // Always release the query runner
+      await queryRunner.release();
     }
   }
 }
