@@ -292,8 +292,14 @@ export class GroupQuestionService {
         throw new NotFoundException(`Group question with ID "${id}" not found.`);
       }
 
+      if (gQue.status == groupQuestionStatus.PUBLISHED) {
+        throw new HttpException("already published group question", HttpStatus.BAD_REQUEST)
+      }
+
       if (gQue.weight === 100) {
         gQue.is_active = true;
+        gQue.status = groupQuestionStatus.PUBLISHED
+
         await entityManager.save(GroupQuestion, gQue);
         await queryRunner.commitTransaction();
         return { message: `Group question "${gQue.name}" published successfully.`, group_question: gQue };
@@ -317,6 +323,45 @@ export class GroupQuestionService {
 
       throw new HttpException(
         'Failed to publish group question due to an unexpected error.',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  async undoPublish(id: string) {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    const entityManager = queryRunner.manager;
+
+    try {
+      const gQue = await entityManager.findOne(GroupQuestion, { where: { id } });
+
+      if (!gQue) {
+        throw new NotFoundException(`Group question with ID "${id}" not found.`);
+      }
+
+      if (gQue.is_active == true) {
+        gQue.is_active = false
+        gQue.status = groupQuestionStatus.DRAFT
+        await entityManager.save(GroupQuestion, gQue);
+        await queryRunner.commitTransaction();
+      } else {
+        throw new HttpException("already un published group question", HttpStatus.BAD_REQUEST)
+      }
+
+      return { message: `Group question "${gQue.name}" status changed to draft successfully.`, group_question: gQue };
+    } catch (error) {
+      await queryRunner.rollbackTransaction(); // Rollback on error
+      console.error('Error deactivating group question:', error);
+      if (error instanceof NotFoundException || error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new HttpException(
+        'Failed to desctivate group question due to an unexpected error.',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     } finally {

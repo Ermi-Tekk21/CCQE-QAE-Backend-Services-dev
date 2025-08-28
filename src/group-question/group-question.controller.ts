@@ -5,7 +5,7 @@ import { UpdateGroupQuestionDto } from './dto/update-group-question.dto';
 
 @Controller('group-question')
 export class GroupQuestionController {
-  constructor(private readonly groupQuestionService: GroupQuestionService) {}
+  constructor(private readonly groupQuestionService: GroupQuestionService) { }
 
   @Post()
   create(@Body() createGroupQuestionDto: CreateGroupQuestionDto) {
@@ -28,8 +28,13 @@ export class GroupQuestionController {
   }
 
   @Patch('publish/:id')
-  publish(@Param('id') id: string){
+  publish(@Param('id') id: string) {
     return this.groupQuestionService.publish(id);
+  }
+
+  @Patch('undo-publish/:id')
+  undoPublish(@Param('id') id: string) {
+    return this.groupQuestionService.undoPublish(id);
   }
 
   @Delete(':id')
