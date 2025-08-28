@@ -275,8 +275,20 @@ export class GroupQuestionService {
     }
   }
 
-  update(id: number, updateGroupQuestionDto: UpdateGroupQuestionDto) {
-    return `This action updates a #${id} groupQuestion`;
+  async update(id: number, updateGroupQuestionDto: UpdateGroupQuestionDto) {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    const entityManager: EntityManager = queryRunner.manager;
+
+    try {
+
+    } catch (error) {
+
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   async publish(id: string) {
