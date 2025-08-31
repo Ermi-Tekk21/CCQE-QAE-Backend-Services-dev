@@ -76,20 +76,17 @@ export class GroupQuestionService {
       }
       group_question.weight = sumOfQuestionWeights;
 
-      // --- CRITICAL FIX START: Save `group_question` *before* linking parent and children ---
       // Save the GroupQuestion for the first time. This makes it a managed entity and assigns an ID.
       let savedGroupQuestion = await entityManager.save(GroupQuestion, group_question);
-      // --- CRITICAL FIX END ---
-
 
       // Handle parent relationship and version change tracking AFTER initial save
       if (createGroupQuestionDto.parentId) {
         const parent = await entityManager.findOne(GroupQuestion, {
           where: { id: createGroupQuestionDto.parentId },
-          relations: ['question','question.question_lookup', 'question.question_answer_option', 'question.question_answer_option.answer_option_lookup'],
+          relations: ['question', 'question.question_lookup', 'question.question_answer_option', 'question.question_answer_option.answer_option_lookup'],
         });
         console.log("parent: ", parent);
-        
+
         if (!parent) {
           throw new HttpException('Parent group question not found.', HttpStatus.NOT_FOUND);
         }
@@ -120,11 +117,11 @@ export class GroupQuestionService {
           removed: [],
           modified: []
         };
-        
+
         const parentQuestions = parent.question || [];
         const currentQuestions = createGroupQuestionDto.questions || [];
         const parentQuestionMap = new Map(parentQuestions.map(q => [q.question_lookup.content, q]));
-   
+
         const currentQuestionMap = new Map(currentQuestions.map(q => [q.content, q]));
         // Check for removed questions
         for (const parentQ of parentQuestions) {
@@ -137,7 +134,7 @@ export class GroupQuestionService {
         for (const currentQ of currentQuestions) {
           let parentQ: typeof parentQuestions[number] | undefined = undefined;
           parentQ = parentQuestionMap.get(currentQ.content);
-          
+
           if (!parentQ) {
             // New question
             if (typeof currentQ.content === 'string') {
@@ -211,7 +208,7 @@ export class GroupQuestionService {
 
         await entityManager.save(versionChangesDetail);
         console.log("changes: ", versionChangesDetail.changed_question_detail);
-        
+
         // Explicitly save `savedGroupQuestion` again to persist the parent link and version update.
         await entityManager.save(GroupQuestion, savedGroupQuestion);
       } else {
@@ -221,7 +218,7 @@ export class GroupQuestionService {
       // Process and save nested Questions and Answer Options.
       for (const queData of createGroupQuestionDto.questions) {
         let questionLookup = await entityManager.findOne(QuestionLookup, { where: { content: queData.content } });
-        
+
         if (!questionLookup) {
           questionLookup = entityManager.create(QuestionLookup, { content: queData.content, created_by: createdByUserId, is_deleted: false });
           await entityManager.save(QuestionLookup, questionLookup);
@@ -246,7 +243,7 @@ export class GroupQuestionService {
         const createdQAO: QuestionAnswerOp[] = []
         for (const ansData of queData.question_answer_option) {
           // Correctly access content from nested DTO
-          
+
           let answerOption = await entityManager.findOne(AnswerOptionLookup, { where: { content: ansData.content } });
           if (!answerOption) {
             answerOption = entityManager.create(AnswerOptionLookup, { content: ansData.content, created_by: createdByUserId, is_deleted: false });
@@ -392,7 +389,7 @@ export class GroupQuestionService {
               await entityManager.save(QuestionLookup, questionEntity.question_lookup);
             }
             if (dtoQ.catagoryId) {
-              
+
               const catagoryEntity = await entityManager.findOne(Catagory, { where: { id: dtoQ.catagoryId } });
               if (!catagoryEntity) {
                 throw new HttpException(`Category with ID "${dtoQ.catagoryId}" not found for question "${dtoQ.content}".`, HttpStatus.NOT_FOUND);
@@ -475,7 +472,7 @@ export class GroupQuestionService {
         .filter(q => !q.is_deleted)
         .reduce((sum, q) => sum + q.weight, 0);
 
-// --- Parent tracking and versioning logic (mirrors the create function) ---
+      // --- Parent tracking and versioning logic (mirrors the create function) ---
       if (updateGroupQuestionDto.parentId) {
         const parent = await entityManager.findOne(GroupQuestion, {
           where: { id: updateGroupQuestionDto.parentId },
