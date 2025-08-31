@@ -341,40 +341,49 @@ export class GroupQuestionService {
         for (const dtoQ of updateGroupQuestionDto.updated_questions) {
           let questionEntity: Question | undefined;
 
-          if (dtoQ.id && existingQuestionsMap.has(dtoQ.id)) {
-            // Update existing question by ID
+          if (dtoQ.id) {
+            // ID is provided, so this should be an update.
+            if (!existingQuestionsMap.has(dtoQ.id)) {
+              // If the ID doesn't exist in the current group, it's an error.
+              throw new NotFoundException(`Question with ID "${dtoQ.id}" not found in this group.`);
+            }
+            
+            // It's a valid update.
             questionEntity = existingQuestionsMap.get(dtoQ.id);
             if (questionEntity) {
+              // If content is changing, we need to find/create a new lookup
+              if (dtoQ.content && dtoQ.content !== questionEntity.question_lookup.content) {
+                  let questionLookup = await entityManager.findOne(QuestionLookup, { where: { content: dtoQ.content } });
+                  if (!questionLookup) {
+                      questionLookup = entityManager.create(QuestionLookup, { content: dtoQ.content, created_by: updatedByUserId, is_deleted: false });
+                      await entityManager.save(QuestionLookup, questionLookup);
+                  }
+                  questionEntity.question_lookup = questionLookup;
+              }
+
               entityManager.merge(Question, questionEntity, dtoQ);
               questionEntity.updated_by = updatedByUserId;
-              questionEntity.updated_at = new Date()
+              questionEntity.updated_at = new Date();
               await entityManager.save(Question, questionEntity);
             }
             existingQuestionsMap.delete(dtoQ.id); // Mark as processed
           } else {
-            // Find by content for new DTO entries without an ID
-            const existingQuestionByContent = groupQuestion.question.find(q => q.question_lookup?.content === dtoQ.content && !q.is_deleted);
-            if (existingQuestionByContent) {
-              questionEntity = existingQuestionByContent;
-              entityManager.merge(Question, questionEntity, dtoQ);
-              questionEntity.updated_by = updatedByUserId;
-            } else {
-              // Create a new question entity
-              questionEntity = entityManager.create(Question, {
-                ...dtoQ,
-                group_question: groupQuestion,
-                created_by: updatedByUserId || groupQuestion.created_by,
-                is_deleted: false,
-              });
+            // No ID provided, so this is a new question.
+            const { id: dtoId, ...questionData } = dtoQ;
+            questionEntity = entityManager.create(Question, {
+              ...questionData,
+              group_question: groupQuestion,
+              created_by: updatedByUserId || groupQuestion.created_by,
+              is_deleted: false,
+            });
 
-              // Find or create the QuestionLookup
-              let questionLookup = await entityManager.findOne(QuestionLookup, { where: { content: dtoQ.content } });
-              if (!questionLookup) {
-                questionLookup = entityManager.create(QuestionLookup, { content: dtoQ.content, created_by: updatedByUserId, is_deleted: false });
-                await entityManager.save(QuestionLookup, questionLookup);
-              }
-              questionEntity.question_lookup = questionLookup;
+            // Find or create the QuestionLookup for the new question
+            let questionLookup = await entityManager.findOne(QuestionLookup, { where: { content: dtoQ.content } });
+            if (!questionLookup) {
+              questionLookup = entityManager.create(QuestionLookup, { content: dtoQ.content, created_by: updatedByUserId, is_deleted: false });
+              await entityManager.save(QuestionLookup, questionLookup);
             }
+            questionEntity.question_lookup = questionLookup;
           }
 
           if (questionEntity) {
@@ -417,6 +426,7 @@ export class GroupQuestionService {
                   await entityManager.save(QuestionAnswerOp, qaoEntity);
                 } else {
                   // Create a new QAO and its lookup
+                  const { id: dtoId, ...qaoData } = dtoQao;
                   let answerOptionLookup = await entityManager.findOne(AnswerOptionLookup, { where: { content: dtoQao.content } });
                   if (!answerOptionLookup) {
                     answerOptionLookup = entityManager.create(AnswerOptionLookup, { content: dtoQao.content, created_by: updatedByUserId, is_deleted: false });
@@ -424,7 +434,7 @@ export class GroupQuestionService {
                   }
 
                   qaoEntity = entityManager.create(QuestionAnswerOp, {
-                    ...dtoQao,
+                    ...qaoData,
                     question: questionEntity,
                     answer_option_lookup: answerOptionLookup,
                     created_by: updatedByUserId || questionEntity.created_by,
@@ -441,6 +451,7 @@ export class GroupQuestionService {
                     existingQao.is_deleted = true;
                     existingQao.deleted_by = updatedByUserId;
                     existingQao.deleted_at = new Date();
+                    await entityManager.save(QuestionAnswerOp, existingQao);
                     qaosToSave.push(existingQao);
                   }
                 }
@@ -453,15 +464,30 @@ export class GroupQuestionService {
         }
       }
 
+      const qaosToUpdate: QuestionAnswerOp[] = [];
+
       // Soft-delete questions that are no longer in the DTO
       for (const existingQ of existingQuestionsMap.values()) {
         if (!existingQ.is_deleted) {
           existingQ.is_deleted = true;
           existingQ.deleted_by = updatedByUserId;
           existingQ.deleted_at = new Date();
-          await entityManager.save(Question, existingQ);
+          questionsToSave.push(existingQ);
+
+          if (existingQ.question_answer_option) {
+            for (const qao of existingQ.question_answer_option) {
+              if (!qao.is_deleted) {
+                qao.is_deleted = true;
+                qao.deleted_by = updatedByUserId;
+                qao.deleted_at = new Date();
+                qaosToUpdate.push(qao);
+              }
+            }
+          }
         }
       }
+      await entityManager.save(Question, questionsToSave);
+      await entityManager.save(QuestionAnswerOp, qaosToUpdate);
 
       const allQuestions = await entityManager.find(Question, {
         where: { group_question: { id: groupQuestion.id } },
