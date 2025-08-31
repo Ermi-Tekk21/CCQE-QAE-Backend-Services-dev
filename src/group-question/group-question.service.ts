@@ -40,7 +40,7 @@ export class GroupQuestionService {
       const currentDate = new Date();
       const month = currentDate.toLocaleString('en-US', { month: 'short' });
       const year = currentDate.getFullYear().toString();
-      const groupQuestionName = `c/${year}/EP`;
+      const groupQuestionName = `${month}/${year}/EP`;
 
       const doesOtherExistWithnThisMonth = await entityManager.findOne(GroupQuestion, {
         where: { name: groupQuestionName, is_deleted: false },
