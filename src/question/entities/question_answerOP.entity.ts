@@ -18,16 +18,22 @@ export class QuestionAnswerOp {
     created_by: string
 
     @Column({ type: "uuid", nullable: true })
+    updated_by: string;
+
+    @Column({ type: "uuid", nullable: true })
     deleted_by: string;
 
     @CreateDateColumn()
     created_at: Date
 
+    @Column({ type: "timestamp", nullable: true, default: null })
+    updated_at: Date
+
     @Column({ type: "timestamp", nullable: true })
     deleted_at: Date;
 
     //relationship
-    @ManyToOne(() => Question, (question) => question.question_answer_ops)
+    @ManyToOne(() => Question, (question) => question.question_answer_option)
     question: Question
 
     @ManyToOne(() => AnswerOptionLookup, (answer_option) => answer_option.question_answer_option)
