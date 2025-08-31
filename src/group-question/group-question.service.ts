@@ -282,7 +282,7 @@ export class GroupQuestionService {
   async findAll(): Promise<GroupQuestion[]> {
     try {
       return await this.dataSource.manager.find(GroupQuestion, {
-        relations: ['question', 'question.question_answer_option']
+        relations: ['question', 'question.question_lookup', 'question.catagory', 'question.question_answer_option', 'question.question_answer_option.answer_option_lookup'],
       });
     } catch (error) {
       console.error('Error finding all group questions:', error);
@@ -294,11 +294,12 @@ export class GroupQuestionService {
     try {
       const gQue = await this.dataSource.manager.findOne(GroupQuestion, {
         where: { id: id },
-        relations: ['question', 'question.question_lookup', 'question.question_answer_option', 'question.question_answer_option.answer_option_lookup'], // Added lookup for completeness
+        relations: ['question', 'question.question_lookup', 'question.catagory', 'question.question_answer_option', 'question.question_answer_option.answer_option_lookup'],
       });
       if (!gQue) {
         throw new NotFoundException(`Group question with ID "${id}" not found.`); // More specific message
       }
+
       return gQue;
     } catch (error) {
       if (error instanceof NotFoundException) {
@@ -347,18 +348,18 @@ export class GroupQuestionService {
               // If the ID doesn't exist in the current group, it's an error.
               throw new NotFoundException(`Question with ID "${dtoQ.id}" not found in this group.`);
             }
-            
+
             // It's a valid update.
             questionEntity = existingQuestionsMap.get(dtoQ.id);
             if (questionEntity) {
               // If content is changing, we need to find/create a new lookup
               if (dtoQ.content && dtoQ.content !== questionEntity.question_lookup.content) {
-                  let questionLookup = await entityManager.findOne(QuestionLookup, { where: { content: dtoQ.content } });
-                  if (!questionLookup) {
-                      questionLookup = entityManager.create(QuestionLookup, { content: dtoQ.content, created_by: updatedByUserId, is_deleted: false });
-                      await entityManager.save(QuestionLookup, questionLookup);
-                  }
-                  questionEntity.question_lookup = questionLookup;
+                let questionLookup = await entityManager.findOne(QuestionLookup, { where: { content: dtoQ.content } });
+                if (!questionLookup) {
+                  questionLookup = entityManager.create(QuestionLookup, { content: dtoQ.content, created_by: updatedByUserId, is_deleted: false });
+                  await entityManager.save(QuestionLookup, questionLookup);
+                }
+                questionEntity.question_lookup = questionLookup;
               }
 
               entityManager.merge(Question, questionEntity, dtoQ);
@@ -745,7 +746,10 @@ export class GroupQuestionService {
     const entityManager = queryRunner.manager;
 
     try {
-      const gQue = await entityManager.findOne(GroupQuestion, { where: { id } });
+      const gQue = await entityManager.findOne(GroupQuestion, {
+        where: { id },
+        relations: ['question', 'question.question_lookup', 'question.catagory', 'question.group_question', 'question.question_answer_option', 'question.question_answer_option.answer_option_lookup']
+      });
 
       if (!gQue) {
         throw new NotFoundException(`Group question with ID "${id}" not found.`);
