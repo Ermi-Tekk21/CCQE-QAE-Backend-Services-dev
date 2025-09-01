@@ -5,7 +5,7 @@ import { UpdateGroupQuestionDto } from './dto/update-group-question.dto';
 
 @Controller('group-question')
 export class GroupQuestionController {
-  constructor(private readonly groupQuestionService: GroupQuestionService) {}
+  constructor(private readonly groupQuestionService: GroupQuestionService) { }
 
   @Post()
   create(@Body() createGroupQuestionDto: CreateGroupQuestionDto) {
@@ -19,16 +19,36 @@ export class GroupQuestionController {
 
   @Get(':id')
   findOne(@Param('id') id: string) {
-    return this.groupQuestionService.findOne(+id);
+    return this.groupQuestionService.findOne(id);
   }
 
-  @Patch(':id')
+  @Patch('update/:id')
   update(@Param('id') id: string, @Body() updateGroupQuestionDto: UpdateGroupQuestionDto) {
-    return this.groupQuestionService.update(+id, updateGroupQuestionDto);
+    return this.groupQuestionService.update(id, updateGroupQuestionDto);
+  }
+
+  @Patch('publish/:id')
+  publish(@Param('id') id: string) {
+    return this.groupQuestionService.publish(id);
+  }
+
+  @Patch('undo-publish/:id')
+  undoPublish(@Param('id') id: string) {
+    return this.groupQuestionService.undoPublish(id);
+  }
+
+  @Patch('temp-del/:id')
+  softDelete(@Param('id') id: string) {
+    return this.groupQuestionService.softDelete(id);
+  }
+
+  @Patch('restore-soft-del/:id')
+  restoreSoftDel(@Param('id') id: string) {
+    return this.groupQuestionService.undoSoftDelete(id);
   }
 
   @Delete(':id')
   remove(@Param('id') id: string) {
-    return this.groupQuestionService.remove(+id);
+    return this.groupQuestionService.remove(id);
   }
 }

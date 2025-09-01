@@ -11,16 +11,16 @@ export class Question {
     id: string
 
     @Column()
-    content: string
-
-    @Column()
     weight: number
 
-    @Column({default: false})
+    @Column({ default: false })
     is_deleted: boolean
 
     @Column({ type: "uuid" })
     created_by: string
+    @Column({ type: "uuid", nullable: true })
+    updated_by: string | null
+
 
     @Column({ type: "uuid", nullable: true })
     deleted_by: string;
@@ -29,21 +29,24 @@ export class Question {
     created_at: Date
 
     @Column({ type: "timestamp", nullable: true })
+    updated_at: Date | null
+
+    @Column({ type: "timestamp", nullable: true })
     deleted_at: Date;
 
     //relationship
+    @ManyToOne(() => GroupQuestion, (group_question) => group_question.question)
+    group_question: GroupQuestion
+
     @ManyToOne(() => QuestionLookup, (question_lookup) => question_lookup.question)
     question_lookup: QuestionLookup
 
     @ManyToOne(() => Catagory, (catagory) => catagory.question)
     catagory: Catagory
 
-    @ManyToOne(() => GroupQuestion, (group_question) => group_question.question)
-    group_question: GroupQuestion
+    @OneToMany(() => QuestionAnswerOp, (questionAnswerOp) => questionAnswerOp.question)
+    question_answer_option: QuestionAnswerOp[]
 
     @OneToMany(() => EvalPerQuestion, (eval_per_question) => eval_per_question.question)
     eval_per_question: EvalPerQuestion[]
-
-    @OneToMany(() => QuestionAnswerOp, (questionAnswerOp) => questionAnswerOp.question)
-    question_answer_ops: QuestionAnswerOp[]
 }

@@ -9,6 +9,8 @@ import { Catagory } from 'src/catagory/entities/catagory.entity';
 import { GroupQuestion } from 'src/group-question/entities/group-question.entity';
 import { QuestionAnswerOp } from 'src/question/entities/question_answerOP.entity';
 import { Question } from 'src/question/entities/question.entity';
+import { VersionChangesDetail } from 'src/group-question/entities/version-changes-detail.entity';
+
 ConfigModule.forRoot({ isGlobal: true });
 
 export const typeOrmConfig: TypeOrmModuleOptions = {
@@ -27,7 +29,8 @@ export const typeOrmConfig: TypeOrmModuleOptions = {
     Catagory,
     GroupQuestion,
     QuestionAnswerOp,
-    Question
+    Question,
+    VersionChangesDetail
   ],
   synchronize: true,
 };
