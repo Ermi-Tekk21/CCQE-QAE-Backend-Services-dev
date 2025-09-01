@@ -1,0 +1,20 @@
+version: "3.8"
+services:
+  ccqe_qae_backend_services:
+    build:
+      context: "."
+      dockerfile: "./Dockerfile"
+    environment:
+      - NODE_OPTIONS="--max-old-space-size=1024"
+    ports:
+      - "3398:3398"
+    networks:
+      - ccqe_qae_dev_network
+    volumes:
+      - ccqe_qae_dev_uploads_volume:/app/uploads
+    restart: always
+networks:
+  ccqe_qae_dev_network:
+    driver: bridge
+volumes:
+  ccqe_qae_dev_uploads_volume: {}
