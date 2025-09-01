@@ -452,6 +452,7 @@ export class GroupQuestionService {
                     existingQao.is_deleted = true;
                     existingQao.deleted_by = updatedByUserId;
                     existingQao.deleted_at = new Date();
+                    existingQao.question = questionEntity
                     await entityManager.save(QuestionAnswerOp, existingQao);
                     qaosToSave.push(existingQao);
                   }
@@ -480,6 +481,7 @@ export class GroupQuestionService {
               if (!qao.is_deleted) {
                 qao.is_deleted = true;
                 qao.deleted_by = updatedByUserId;
+                qao.question = existingQ
                 qao.deleted_at = new Date();
                 qaosToUpdate.push(qao);
               }
