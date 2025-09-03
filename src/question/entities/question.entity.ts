@@ -35,7 +35,9 @@ export class Question {
     deleted_at: Date;
 
     //relationship
-    @ManyToOne(() => GroupQuestion, (group_question) => group_question.question)
+    @ManyToOne(() => GroupQuestion, (group_question) => group_question.question, {
+        onDelete: 'CASCADE'
+    })
     group_question: GroupQuestion
 
     @ManyToOne(() => QuestionLookup, (question_lookup) => question_lookup.question)
@@ -44,7 +46,9 @@ export class Question {
     @ManyToOne(() => Catagory, (catagory) => catagory.question)
     catagory: Catagory
 
-    @OneToMany(() => QuestionAnswerOp, (questionAnswerOp) => questionAnswerOp.question)
+    @OneToMany(() => QuestionAnswerOp, (questionAnswerOp) => questionAnswerOp.question, {
+        cascade:true,
+    })
     question_answer_option: QuestionAnswerOp[]
 
     @OneToMany(() => EvalPerQuestion, (eval_per_question) => eval_per_question.question)

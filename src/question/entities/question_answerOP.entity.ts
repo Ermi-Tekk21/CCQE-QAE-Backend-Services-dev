@@ -11,7 +11,7 @@ export class QuestionAnswerOp {
     @Column()
     weight: number
 
-    @Column({default: false})
+    @Column({ default: false })
     is_deleted: boolean
 
     @Column({ type: "uuid" })
@@ -33,7 +33,9 @@ export class QuestionAnswerOp {
     deleted_at: Date;
 
     //relationship
-    @ManyToOne(() => Question, (question) => question.question_answer_option)
+    @ManyToOne(() => Question, (question) => question.question_answer_option, {
+        onDelete: "CASCADE"
+    })
     question: Question
 
     @ManyToOne(() => AnswerOptionLookup, (answer_option) => answer_option.question_answer_option)
