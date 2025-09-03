@@ -85,7 +85,6 @@ export class GroupQuestionService {
           where: { id: createGroupQuestionDto.parentId },
           relations: ['question', 'question.question_lookup', 'question.question_answer_option', 'question.question_answer_option.answer_option_lookup'],
         });
-        console.log("parent: ", parent);
 
         if (!parent) {
           throw new HttpException('Parent group question not found.', HttpStatus.NOT_FOUND);
@@ -835,30 +834,35 @@ export class GroupQuestionService {
     const entityManager = queryRunner.manager;
 
     try {
-      const gQue = await entityManager.findOne(GroupQuestion, { where: { id } }); // all gQue excluding soft deleted group questions
+
+      const gQue = await entityManager.findOne(GroupQuestion, { where: { id } });
 
       if (!gQue) {
-        const isTempDeleted = await entityManager.findOne(GroupQuestion, { where: { id, is_deleted: true }, withDeleted: true });
+        const isTempDeleted = await entityManager.findOne(GroupQuestion, { where: { id }, withDeleted: true });
         if (isTempDeleted) {
-          throw new NotFoundException(`Group question with ID "${id}" is already soft deleted.`);
-        } else {
-          throw new NotFoundException(`Group question with ID "${id}" not found.`);
+          throw new NotFoundException(`Group question with ID "${id}" already soft deleted`);
         }
+        throw new NotFoundException(`Group question with ID "${id}" not found.`);
       }
 
+
+      await entityManager.softDelete(GroupQuestion, { id: gQue.id });
       gQue.deleted_at = new Date
       gQue.is_deleted = true
-      await entityManager.softDelete(GroupQuestion, gQue)
-      await entityManager.save(GroupQuestion, gQue);
+      await entityManager.save(GroupQuestion, gQue)
 
       await queryRunner.commitTransaction();
+
+      return {
+        success: true,
+        message: "group question temporally deleted successfully",
+        "temp deleted group question": gQue
+      }
     } catch (error) {
-      await queryRunner.rollbackTransaction(); // Rollback on error
-      console.error('Error publishing group question:', error);
+      await queryRunner.rollbackTransaction();
       if (error instanceof NotFoundException || error instanceof HttpException) {
         throw error;
       }
-
       throw new HttpException(
         'Failed to delete group question due to an unexpected error.',
         HttpStatus.INTERNAL_SERVER_ERROR,
@@ -882,17 +886,21 @@ export class GroupQuestionService {
       } else {
         const isNotDeleted = await entityManager.findOne(GroupQuestion, { where: { id, is_deleted: false }, withDeleted: false })
         if (isNotDeleted) {
-          throw new NotFoundException(`Group question with ID "${id}" not found`);
+          throw new NotFoundException(`Group question with ID "${id}" is already not soft deleted`);
         }
       }
 
+      await entityManager.restore(GroupQuestion, { id: gQue.id });
       gQue.is_deleted = false
       gQue.deleted_at = null
-
-      await entityManager.restore(GroupQuestion, gQue);
       await entityManager.save(GroupQuestion, gQue);
       await queryRunner.commitTransaction();
 
+      return {
+        success: true,
+        message: "group question restored successfully",
+        "temp deleted group question": gQue
+      }
     } catch (error) {
       await queryRunner.rollbackTransaction(); // Rollback on error
       console.error('resoring delete group question:', error);

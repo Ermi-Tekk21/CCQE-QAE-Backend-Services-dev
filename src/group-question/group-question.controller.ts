@@ -37,12 +37,12 @@ export class GroupQuestionController {
     return this.groupQuestionService.undoPublish(id);
   }
 
-  @Patch('temp-del/:id')
+  @Patch('temp-delete/:id')
   softDelete(@Param('id') id: string) {
     return this.groupQuestionService.softDelete(id);
   }
 
-  @Patch('restore-soft-del/:id')
+  @Patch('restore-soft-delete/:id')
   restoreSoftDel(@Param('id') id: string) {
     return this.groupQuestionService.undoSoftDelete(id);
   }
