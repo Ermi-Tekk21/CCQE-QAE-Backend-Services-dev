@@ -1,10 +1,9 @@
-import { HttpException, Injectable, NotFoundException } from '@nestjs/common';
+import { HttpException, Injectable, NotFoundException, BadRequestException, InternalServerErrorException, HttpStatus } from '@nestjs/common';
 import { CreateCatagoryDto } from './dto/create-catagory.dto';
 import { UpdateCatagoryDto } from './dto/update-catagory.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Catagory } from './entities/catagory.entity';
 import { Repository } from 'typeorm';
-import { BadRequestException, InternalServerErrorException } from "@nestjs/common";
 
 @Injectable()
 export class CatagoryService {
@@ -115,14 +114,26 @@ export class CatagoryService {
     }
   }
 
-  async remove(id: string) {
+  async remove(id: string): Promise<{
+    success: boolean,
+    message: string,
+  }> {
     try {
-      await this.findOne(id)
-      await this.catagoryRepo.delete(id)
-      return { message: "Category successfully deleted" }
+      await this.findOne(id);
+
+      await this.catagoryRepo.delete(id);
+
+      return { 
+        success: true,
+        message: "Category successfully deleted",
+      }
     } catch (error) {
-      if (error instanceof NotFoundException) { throw error }
-      throw new HttpException('Failed to delete catagory', error.status);
+      if (error instanceof NotFoundException) { 
+        throw error 
+      } else if(error.code == 23503 ){
+        throw new BadRequestException("this catagory id is referenced in question table")
+      }
+      throw new HttpException('Failed to delete catagory', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 }

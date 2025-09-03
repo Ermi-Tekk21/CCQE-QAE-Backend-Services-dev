@@ -285,7 +285,7 @@ export class GroupQuestionService {
   }
 
   async findAll(): Promise<{
-    success: true,
+    success: boolean,
     "group questions": GroupQuestion[]
   }> {
     try {
@@ -303,7 +303,7 @@ export class GroupQuestionService {
   }
 
   async findOne(id: string): Promise<{
-    success: true,
+    success: boolean,
     "group question": GroupQuestion | null
   }> {
     try {
@@ -329,7 +329,7 @@ export class GroupQuestionService {
   }
 
   async update(id: string, updateGroupQuestionDto: UpdateGroupQuestionDto): Promise<{
-    success: true,
+    success: boolean,
     message: string,
     "updated group question": GroupQuestion
   }> {
@@ -674,7 +674,7 @@ export class GroupQuestionService {
   }
 
   async publish(id: string): Promise<{
-    success: true,
+    success: boolean,
     message: string,
     "published group question": GroupQuestion
   }> {
@@ -774,7 +774,7 @@ export class GroupQuestionService {
   }
 
   async remove(id: string): Promise<{
-    success: true,
+    success: boolean,
     message: string
   }> {
     const queryRunner = this.dataSource.createQueryRunner();
