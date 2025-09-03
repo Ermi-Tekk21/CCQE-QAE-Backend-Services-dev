@@ -2,6 +2,7 @@ import { Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn, Ma
 import { AnswerOptionLookup } from "src/answer-option-lookup/entities/answer-option-lookup.entity";
 import { Question } from "./question.entity";
 import { EvalPerQuestion } from "src/evaluation/entities/evaluationPerQuestion.entity";
+import { Exclude } from "class-transformer";
 
 @Entity("question_and_answer_option")
 export class QuestionAnswerOp {
@@ -33,6 +34,7 @@ export class QuestionAnswerOp {
     deleted_at: Date;
 
     //relationship
+    @Exclude()
     @ManyToOne(() => Question, (question) => question.question_answer_option, {
         onDelete: "CASCADE"
     })

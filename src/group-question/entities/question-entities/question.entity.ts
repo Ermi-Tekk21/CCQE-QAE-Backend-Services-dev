@@ -4,6 +4,7 @@ import { Catagory } from "src/catagory/entities/catagory.entity"
 import { GroupQuestion } from "src/group-question/entities/group-question.entity"
 import { EvalPerQuestion } from "src/evaluation/entities/evaluationPerQuestion.entity"
 import { QuestionAnswerOp } from "./question_answerOP.entity"
+import { Exclude } from 'class-transformer';
 
 @Entity('question')
 export class Question {
@@ -35,6 +36,7 @@ export class Question {
     deleted_at: Date;
 
     //relationship
+    @Exclude() 
     @ManyToOne(() => GroupQuestion, (group_question) => group_question.question, {
         onDelete: 'CASCADE'
     })

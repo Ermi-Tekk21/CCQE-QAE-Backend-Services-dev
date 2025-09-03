@@ -42,15 +42,15 @@ export class GroupQuestionService {
       const year = currentDate.getFullYear().toString();
       const groupQuestionName = `${month}/${year}/EP`;
 
-      const doesOtherExistWithnThisMonth = await entityManager.findOne(GroupQuestion, {
-        where: { name: groupQuestionName, is_deleted: false },
-      });
-      if (doesOtherExistWithnThisMonth) {
-        throw new HttpException(
-          `You can't create more than one group question for the month of ${month} ${year}.`,
-          HttpStatus.BAD_REQUEST,
-        );
-      }
+      // const doesOtherExistWithnThisMonth = await entityManager.findOne(GroupQuestion, {
+      //   where: { name: groupQuestionName, is_deleted: false },
+      // });
+      // if (doesOtherExistWithnThisMonth) {
+      //   throw new HttpException(
+      //     `You can't create more than one group question for the month of ${month} ${year}.`,
+      //     HttpStatus.BAD_REQUEST,
+      //   );
+      // }
 
       // Create the GroupQuestion entity instance in memory.
       let group_question = entityManager.create(GroupQuestion, createGroupQuestionDto);
@@ -207,7 +207,6 @@ export class GroupQuestionService {
         });
 
         await entityManager.save(versionChangesDetail);
-        console.log("changes: ", versionChangesDetail.changed_question_detail);
 
         // Explicitly save `savedGroupQuestion` again to persist the parent link and version update.
         await entityManager.save(GroupQuestion, savedGroupQuestion);
@@ -269,11 +268,15 @@ export class GroupQuestionService {
         await entityManager.save(GroupQuestion, savedGroupQuestion)
       }
       await queryRunner.commitTransaction();
+      const responseData = {
+        ...savedGroupQuestion,
+        parent: savedGroupQuestion.parent ? savedGroupQuestion.parent.id : null,
+      };
 
       return {
         success: true,
         message: 'Group question created successfully',
-        group_question: savedGroupQuestion
+        group_question: responseData
       };
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -302,22 +305,24 @@ export class GroupQuestionService {
     }
   }
 
-  async findOne(id: string): Promise<{
-    success: boolean,
-    "group question": GroupQuestion | null
-  }> {
+  async findOne(id: string) {
     try {
       const gQue = await this.dataSource.manager.findOne(GroupQuestion, {
         where: { id: id },
-        relations: ['question', 'question.question_lookup', 'question.catagory', 'question.question_answer_option', 'question.question_answer_option.answer_option_lookup'],
+        relations: ['question', 'question.question_lookup', 'question.catagory', 'question.question_answer_option', 'question.question_answer_option.answer_option_lookup', 'parent'],
       });
       if (!gQue) {
         throw new NotFoundException(`Group question with ID "${id}" not found.`); // More specific message
       }
 
+      const responseData = {
+        ...gQue,
+        parent: gQue.parent ? gQue.parent.id : null
+      };
+
       return {
         success: true,
-        "group question": gQue
+        "group question": responseData
       };
     } catch (error) {
       if (error instanceof NotFoundException) {
@@ -791,8 +796,8 @@ export class GroupQuestionService {
 
       if (!gQue) {
         throw new NotFoundException(`Group question with ID "${id}" not found.`);
-      }else {
-        if (gQue.status !== groupQuestionStatus.DRAFT){
+      } else {
+        if (gQue.status !== groupQuestionStatus.DRAFT) {
           throw new BadRequestException('you can not delete published and completed group question, only draft group question are possible to delete')
         }
         await entityManager.remove(GroupQuestion, gQue);
@@ -806,7 +811,10 @@ export class GroupQuestionService {
 
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      console.error('Error removing group question:', error);
+      if (error.code == 23503) {
+        throw new BadRequestException("this group question is related to other data, you can not delete")
+      }
+
       if (error instanceof NotFoundException || error instanceof HttpException || error instanceof BadRequestException) {
         throw error;
       }
@@ -831,7 +839,7 @@ export class GroupQuestionService {
 
       if (!gQue) {
         const isTempDeleted = await entityManager.findOne(GroupQuestion, { where: { id, is_deleted: true }, withDeleted: true });
-        if (isTempDeleted){
+        if (isTempDeleted) {
           throw new NotFoundException(`Group question with ID "${id}" is already soft deleted.`);
         } else {
           throw new NotFoundException(`Group question with ID "${id}" not found.`);
@@ -871,9 +879,9 @@ export class GroupQuestionService {
 
       if (!gQue) {
         throw new NotFoundException(`Group question with ID "${id}" not found`);
-      } else{
+      } else {
         const isNotDeleted = await entityManager.findOne(GroupQuestion, { where: { id, is_deleted: false }, withDeleted: false })
-        if ( isNotDeleted ){
+        if (isNotDeleted) {
           throw new NotFoundException(`Group question with ID "${id}" not found`);
         }
       }
