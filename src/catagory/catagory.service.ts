@@ -48,7 +48,10 @@ export class CatagoryService {
           throw new NotFoundException("Category not found")
         }
       }
-      return catagory;
+      return {
+        success: true,
+        catagory
+      };
     } catch (error) {
       if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error
@@ -59,7 +62,7 @@ export class CatagoryService {
 
   async update(id: string, updateCatagoryDto: UpdateCatagoryDto) {
     try {
-      const catagory = await this.findOne(id)
+      const { catagory } = await this.findOne(id)
       const updated = this.catagoryRepo.merge(catagory, updateCatagoryDto)
 
       updated.updated_at = new Date()
@@ -78,7 +81,8 @@ export class CatagoryService {
 
   async softDelete(id: string) {
     try {
-      const category = await this.findOne(id);
+      const result = await this.findOne(id);
+      const category = result.catagory;
 
       await this.catagoryRepo.softDelete(id)
 

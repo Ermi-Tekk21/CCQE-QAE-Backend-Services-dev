@@ -16,6 +16,8 @@ export class VersionChangesDetail {
     changed_question_detail: object
 
     //relation ship
-    @ManyToOne(() => GroupQuestion, (groupQuestion) => groupQuestion.version_changes_detail)
+    @ManyToOne(() => GroupQuestion, (groupQuestion) => groupQuestion.version_changes_detail, {
+        onDelete: 'CASCADE'
+    })
     group_question: GroupQuestion;
 }

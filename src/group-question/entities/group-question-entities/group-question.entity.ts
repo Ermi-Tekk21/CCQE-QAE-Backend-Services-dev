@@ -64,6 +64,8 @@ export class GroupQuestion {
     @ManyToOne(() => GroupQuestion, (groupQuestion) => groupQuestion.id)
     parent: GroupQuestion | null
 
-    @OneToMany(() => VersionChangesDetail, (versionChangesDetail) => versionChangesDetail.group_question)
+    @OneToMany(() => VersionChangesDetail, (versionChangesDetail) => versionChangesDetail.group_question, {
+        cascade: true
+    })
     version_changes_detail: VersionChangesDetail[]
 }
