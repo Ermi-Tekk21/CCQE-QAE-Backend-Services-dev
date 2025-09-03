@@ -1,9 +1,9 @@
-import { Column, CreateDateColumn, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm"
+import { Column, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm"
 import { QuestionLookup } from "src/question-lookup/entities/question-lookup.entity"
 import { Catagory } from "src/catagory/entities/catagory.entity"
-import { GroupQuestion } from "src/group-question/entities/group-question.entity"
+import { GroupQuestion } from "../group-question-entities/group-question.entity"
 import { EvalPerQuestion } from "src/evaluation/entities/evaluationPerQuestion.entity"
-import { QuestionAnswerOp } from "./question_answerOP.entity"
+import { QuestionAnswerOp } from "../question-answer-option-entities/question_answerOP.entity"
 import { Exclude } from 'class-transformer';
 
 @Entity('question')
@@ -16,24 +16,6 @@ export class Question {
 
     @Column({ default: false })
     is_deleted: boolean
-
-    @Column({ type: "uuid" })
-    created_by: string
-    @Column({ type: "uuid", nullable: true })
-    updated_by: string | null
-
-
-    @Column({ type: "uuid", nullable: true })
-    deleted_by: string;
-
-    @CreateDateColumn()
-    created_at: Date
-
-    @Column({ type: "timestamp", nullable: true })
-    updated_at: Date | null
-
-    @Column({ type: "timestamp", nullable: true })
-    deleted_at: Date;
 
     //relationship
     @Exclude() 

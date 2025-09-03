@@ -1,5 +1,5 @@
 import { Column, Entity, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
-import { GroupQuestion } from "./group-question.entity";
+import { GroupQuestion } from "./group-question-entities/group-question.entity";
 
 @Entity("version_changes_detail")
 export class VersionChangesDetail {

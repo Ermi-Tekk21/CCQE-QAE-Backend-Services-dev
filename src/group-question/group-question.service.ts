@@ -2,14 +2,14 @@ import { BadRequestException, HttpException, HttpStatus, Injectable, InternalSer
 import { groupQuestionStatus } from 'src/common/group_question.status';
 import { DataSource, EntityManager } from 'typeorm';
 import { Question } from 'src/group-question/entities/question-entities/question.entity';
-import { QuestionAnswerOp } from 'src/group-question/entities/question-entities/question_answerOP.entity';
+import { QuestionAnswerOp } from 'src/group-question/entities/question-answer-option-entities/question_answerOP.entity';
 import { AnswerOptionLookup } from 'src/answer-option-lookup/entities/answer-option-lookup.entity';
 import { QuestionLookup } from 'src/question-lookup/entities/question-lookup.entity';
 import { Catagory } from 'src/catagory/entities/catagory.entity';
-import { GroupQuestion } from './entities/group-question.entity';
+import { GroupQuestion } from './entities/group-question-entities/group-question.entity';
 import { VersionChangesDetail } from './entities/version-changes-detail.entity';
-import { UpdateGroupQuestionDto } from './dto/update-group-question.dto';
-import { CreateGroupQuestionDto } from './dto/create-group-question.dto';
+import { UpdateGroupQuestionDto } from './dto/group-question-dto/update-group-question.dto';
+import { CreateGroupQuestionDto } from './dto/group-question-dto/create-group-question.dto';
 
 @Injectable()
 export class GroupQuestionService {
@@ -389,8 +389,6 @@ export class GroupQuestionService {
               }
 
               entityManager.merge(Question, questionEntity, dtoQ);
-              questionEntity.updated_by = updatedByUserId;
-              questionEntity.updated_at = new Date();
               await entityManager.save(Question, questionEntity);
             }
             existingQuestionsMap.delete(dtoQ.id); // Mark as processed
@@ -448,8 +446,6 @@ export class GroupQuestionService {
                   // Update existing QAO
                   qaoEntity = existingQao;
                   entityManager.merge(QuestionAnswerOp, qaoEntity, dtoQao);
-                  qaoEntity.updated_by = updatedByUserId;
-                  qaoEntity.updated_at = new Date();
                   await entityManager.save(QuestionAnswerOp, qaoEntity);
                 } else {
                   // Create a new QAO and its lookup
@@ -464,7 +460,6 @@ export class GroupQuestionService {
                     ...qaoData,
                     question: questionEntity,
                     answer_option_lookup: answerOptionLookup,
-                    created_by: updatedByUserId || questionEntity.created_by,
                     is_deleted: false,
                   });
                   await entityManager.save(QuestionAnswerOp, qaoEntity);
@@ -476,8 +471,6 @@ export class GroupQuestionService {
                 if (!dtoQ.updated_question_answer_option.some(dtoQao => dtoQao.content === content)) {
                   if (!existingQao.is_deleted) {
                     existingQao.is_deleted = true;
-                    existingQao.deleted_by = updatedByUserId;
-                    existingQao.deleted_at = new Date();
                     existingQao.question = questionEntity
                     await entityManager.save(QuestionAnswerOp, existingQao);
                     qaosToSave.push(existingQao);
@@ -498,17 +491,13 @@ export class GroupQuestionService {
       for (const existingQ of existingQuestionsMap.values()) {
         if (!existingQ.is_deleted) {
           existingQ.is_deleted = true;
-          existingQ.deleted_by = updatedByUserId;
-          existingQ.deleted_at = new Date();
           questionsToSave.push(existingQ);
 
           if (existingQ.question_answer_option) {
             for (const qao of existingQ.question_answer_option) {
               if (!qao.is_deleted) {
                 qao.is_deleted = true;
-                qao.deleted_by = updatedByUserId;
                 qao.question = existingQ
-                qao.deleted_at = new Date();
                 qaosToUpdate.push(qao);
               }
             }

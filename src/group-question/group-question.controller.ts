@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
 import { GroupQuestionService } from './group-question.service';
-import { CreateGroupQuestionDto } from './dto/create-group-question.dto';
-import { UpdateGroupQuestionDto } from './dto/update-group-question.dto';
+import { CreateGroupQuestionDto } from './dto/group-question-dto/create-group-question.dto';
+import { UpdateGroupQuestionDto } from './dto/group-question-dto/update-group-question.dto';
 
 @Controller('group-question')
 export class GroupQuestionController {

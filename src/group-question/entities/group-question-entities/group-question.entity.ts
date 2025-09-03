@@ -2,7 +2,7 @@ import { groupQuestionStatus } from "src/common/group_question.status";
 import { Column, CreateDateColumn, DeleteDateColumn, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm"
 import { Question } from "src/group-question/entities/question-entities/question.entity";
 import { AgentEvaluation } from "src/evaluation/entities/evaluation.entity";
-import { VersionChangesDetail } from "./version-changes-detail.entity";
+import { VersionChangesDetail } from "../version-changes-detail.entity";
 
 @Entity('group_question')
 export class GroupQuestion {

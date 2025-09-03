@@ -1,6 +1,6 @@
-import { Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn, ManyToOne } from "typeorm";
+import { Column, Entity, OneToMany, PrimaryGeneratedColumn, ManyToOne } from "typeorm";
 import { AnswerOptionLookup } from "src/answer-option-lookup/entities/answer-option-lookup.entity";
-import { Question } from "./question.entity";
+import { Question } from "../question-entities/question.entity";
 import { EvalPerQuestion } from "src/evaluation/entities/evaluationPerQuestion.entity";
 import { Exclude } from "class-transformer";
 
@@ -14,24 +14,6 @@ export class QuestionAnswerOp {
 
     @Column({ default: false })
     is_deleted: boolean
-
-    @Column({ type: "uuid" })
-    created_by: string
-
-    @Column({ type: "uuid", nullable: true })
-    updated_by: string;
-
-    @Column({ type: "uuid", nullable: true })
-    deleted_by: string;
-
-    @CreateDateColumn()
-    created_at: Date
-
-    @Column({ type: "timestamp", nullable: true, default: null })
-    updated_at: Date
-
-    @Column({ type: "timestamp", nullable: true })
-    deleted_at: Date;
 
     //relationship
     @Exclude()
