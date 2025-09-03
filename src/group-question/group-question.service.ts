@@ -740,7 +740,7 @@ export class GroupQuestionService {
         throw new NotFoundException(`Group question with ID "${id}" not found.`);
       }
 
-      if (gQue.is_active == true) {
+      if (gQue.is_active) {
         gQue.is_active = false
         gQue.status = groupQuestionStatus.DRAFT
         await entityManager.save(GroupQuestion, gQue);
