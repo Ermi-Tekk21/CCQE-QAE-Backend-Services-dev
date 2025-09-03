@@ -1,5 +1,5 @@
 import { Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn } from "typeorm";
-import { QuestionAnswerOp } from "src/question/entities/question_answerOP.entity";
+import { QuestionAnswerOp } from "src/group-question/entities/question-entities/question_answerOP.entity";
 
 @Entity("answer_option_lookup")
 export class AnswerOptionLookup {

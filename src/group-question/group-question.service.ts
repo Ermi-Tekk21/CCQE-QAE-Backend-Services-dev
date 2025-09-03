@@ -1,8 +1,8 @@
 import { BadRequestException, HttpException, HttpStatus, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { groupQuestionStatus } from 'src/common/group_question.status';
 import { DataSource, EntityManager } from 'typeorm';
-import { Question } from 'src/question/entities/question.entity';
-import { QuestionAnswerOp } from 'src/question/entities/question_answerOP.entity';
+import { Question } from 'src/group-question/entities/question-entities/question.entity';
+import { QuestionAnswerOp } from 'src/group-question/entities/question-entities/question_answerOP.entity';
 import { AnswerOptionLookup } from 'src/answer-option-lookup/entities/answer-option-lookup.entity';
 import { QuestionLookup } from 'src/question-lookup/entities/question-lookup.entity';
 import { Catagory } from 'src/catagory/entities/catagory.entity';
