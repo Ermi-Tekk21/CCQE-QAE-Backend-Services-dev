@@ -1,6 +1,6 @@
-import { IsDate, IsOptional, IsUUID, MinDate, IsArray, IsString, IsInt, Min } from 'class-validator';
+import { IsDate, IsOptional, IsUUID, MinDate, IsArray} from 'class-validator';
 import { Type } from 'class-transformer';
-import { CreateQuestionDto } from 'src/question/dto/create-question.dto';
+import { CreateQuestionDto } from 'src/group-question/dto/question-dto/create-question.dto';
 
 export class CreateGroupQuestionDto {
     @IsDate()

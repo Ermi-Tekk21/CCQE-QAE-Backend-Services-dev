@@ -1,7 +1,7 @@
 import { Column, CreateDateColumn, Entity, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
 import { EvalPerAudio } from "./evaluationPerAudio.entity";
-import { QuestionAnswerOp } from "src/question/entities/question_answerOP.entity";
-import { Question } from "src/question/entities/question.entity";
+import { QuestionAnswerOp } from "src/group-question/entities/question-answer-option-entities/question_answerOP.entity";
+import { Question } from "src/group-question/entities/question-entities/question.entity";
 
 @Entity("evaluation_per_question")
 export class EvalPerQuestion {

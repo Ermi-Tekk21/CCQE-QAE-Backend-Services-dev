@@ -3,7 +3,6 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { QuestionModule } from './question/question.module';
 import { EvaluationModule } from './evaluation/evaluation.module';
 import { typeOrmConfig } from './common/config/datasource';
 import { CatagoryModule } from './catagory/catagory.module';
@@ -15,7 +14,6 @@ import { VersionChangesDetail } from './group-question/entities/version-changes-
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true }),
     TypeOrmModule.forRoot(typeOrmConfig),
-    QuestionModule,
     EvaluationModule,
     CatagoryModule,
     AnswerOptionLookupModule,

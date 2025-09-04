@@ -1,5 +1,5 @@
 import { Column, Entity, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
-import { GroupQuestion } from "./group-question.entity";
+import { GroupQuestion } from "./group-question-entities/group-question.entity";
 
 @Entity("version_changes_detail")
 export class VersionChangesDetail {
@@ -16,6 +16,8 @@ export class VersionChangesDetail {
     changed_question_detail: object
 
     //relation ship
-    @ManyToOne(() => GroupQuestion, (groupQuestion) => groupQuestion.version_changes_detail)
+    @ManyToOne(() => GroupQuestion, (groupQuestion) => groupQuestion.version_changes_detail, {
+        onDelete: 'CASCADE'
+    })
     group_question: GroupQuestion;
 }

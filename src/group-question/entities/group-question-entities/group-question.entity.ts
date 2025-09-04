@@ -1,15 +1,15 @@
 import { groupQuestionStatus } from "src/common/group_question.status";
-import { Column, CreateDateColumn, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm"
-import { Question } from "src/question/entities/question.entity";
+import { Column, CreateDateColumn, DeleteDateColumn, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm"
+import { Question } from "src/group-question/entities/question-entities/question.entity";
 import { AgentEvaluation } from "src/evaluation/entities/evaluation.entity";
-import { VersionChangesDetail } from "./version-changes-detail.entity";
+import { VersionChangesDetail } from "../version-changes-detail.entity";
 
 @Entity('group_question')
 export class GroupQuestion {
     @PrimaryGeneratedColumn('uuid')
     id: string
 
-    @Column({unique: true, })
+    @Column()
     name: string
 
     @Column({ unique: true, nullable: true })
@@ -49,11 +49,13 @@ export class GroupQuestion {
     @Column({ type: "timestamp", nullable: true })
     updated_at: Date | null
 
-    @Column({ type: "timestamp", nullable: true })
+    @DeleteDateColumn({ type: "timestamp", nullable: true})
     deleted_at: Date | null;
 
     //relationship
-    @OneToMany(() => Question, (question) => question.group_question)
+    @OneToMany(() => Question, (question) => question.group_question, {
+        cascade: true
+    })
     question: Question[]
 
     @OneToMany(() => AgentEvaluation, (agent_evaluation) => agent_evaluation.group_question)
@@ -62,6 +64,8 @@ export class GroupQuestion {
     @ManyToOne(() => GroupQuestion, (groupQuestion) => groupQuestion.id)
     parent: GroupQuestion | null
 
-    @OneToMany(() => VersionChangesDetail, (versionChangesDetail) => versionChangesDetail.group_question)
+    @OneToMany(() => VersionChangesDetail, (versionChangesDetail) => versionChangesDetail.group_question, {
+        cascade: true
+    })
     version_changes_detail: VersionChangesDetail[]
 }
