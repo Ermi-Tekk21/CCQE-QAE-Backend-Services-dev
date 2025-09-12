@@ -11,7 +11,7 @@ export class EvalPerQuestion {
     @Column({default: false})
     is_deleted: boolean
 
-    @Column({ type: "uuid" })
+    @Column({ type: "uuid", nullable: true })
     created_by: string
 
     @Column({ type: "uuid", nullable: true })
@@ -24,7 +24,9 @@ export class EvalPerQuestion {
     deleted_at: Date;
 
     // relationship
-    @ManyToOne(() => EvalPerAudio, (eval_per_audio) => eval_per_audio.eval_per_question)
+    @ManyToOne(() => EvalPerAudio, (eval_per_audio) => eval_per_audio.eval_per_question, {
+        onDelete: "CASCADE"
+    })
     eval_per_audio: EvalPerAudio
 
     @ManyToOne(() => QuestionAnswerOp, (auestion_answerOp) => auestion_answerOp.eval_per_question)

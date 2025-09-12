@@ -9,13 +9,10 @@ export class AgentEvaluation {
     id: string
 
     @Column({ type: "uuid" })
-    agent_id: string
+    agent_assignment_id: string
 
-    @Column({ type: "uuid" })
-    evaluator_id: string
-
-    @Column({ type: "float" })
-    result: number
+    @Column({ type: "float", nullable: true})
+    result: number | true
 
     @Column({
         type: 'enum',
@@ -27,7 +24,7 @@ export class AgentEvaluation {
     @Column({default: false})
     is_deleted: boolean
 
-    @Column({ type: "uuid" })
+    @Column({ type: "uuid", nullable: true })
     created_by: string
 
     @Column({ type: "uuid", nullable: true })
@@ -42,7 +39,9 @@ export class AgentEvaluation {
     @ManyToOne(()=> GroupQuestion, (group_question)=> group_question.agent_evaluation)
     group_question: GroupQuestion
 
-    @OneToMany(()=> EvalPerAudio, (eval_per_audio)=> eval_per_audio.agent_evaluation)
+    @OneToMany(()=> EvalPerAudio, (eval_per_audio)=> eval_per_audio.agent_evaluation, {
+        cascade: true
+    })
     eval_per_audio: EvalPerAudio[]
     
 }

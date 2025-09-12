@@ -10,13 +10,13 @@ export class EvalPerAudio {
     @Column({ type: "uuid" })
     audio_id: string
 
-    @Column({ type: "float" })
+    @Column({ type: "float", nullable: true })
     result: number
 
     @Column({default: false})
     is_deleted: boolean
 
-    @Column({ type: "uuid" })
+    @Column({ type: "uuid", nullable: true })
     created_by: string
 
     @Column({ type: "uuid", nullable: true })
@@ -29,9 +29,13 @@ export class EvalPerAudio {
     deleted_at: Date;
 
     // relationship
-    @ManyToOne(() => AgentEvaluation, (agent_eval) => agent_eval.eval_per_audio)
+    @ManyToOne(() => AgentEvaluation, (agent_eval) => agent_eval.eval_per_audio, {
+        onDelete: 'CASCADE'
+    })
     agent_evaluation: AgentEvaluation
 
-    @OneToMany(() => EvalPerQuestion, (eval_per_question) => eval_per_question.eval_per_audio)
+    @OneToMany(() => EvalPerQuestion, (eval_per_question) => eval_per_question.eval_per_audio, {
+        cascade: true
+    })
     eval_per_question: EvalPerQuestion[]
 }

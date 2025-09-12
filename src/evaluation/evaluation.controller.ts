@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
 import { EvaluationService } from './evaluation.service';
-import { CreateEvaluationDto } from './dto/create-evaluation.dto';
-import { UpdateEvaluationDto } from './dto/update-evaluation.dto';
+import { CreateEvaluationDto } from './dto/agent-evaluation-dto/create-evaluation.dto';
+import { UpdateEvaluationDto } from './dto/agent-evaluation-dto/update-evaluation.dto';
 
 @Controller('evaluation')
 export class EvaluationController {
@@ -29,6 +29,6 @@ export class EvaluationController {
 
   @Delete(':id')
   remove(@Param('id') id: string) {
-    return this.evaluationService.remove(+id);
+    return this.evaluationService.remove(id);
   }
 }
