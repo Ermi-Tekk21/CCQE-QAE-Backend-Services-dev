@@ -21,10 +21,10 @@ export class EvaluationController {
   findOne(@Param('id') id: string) {
     return this.evaluationService.findOne(+id);
   }
-
+ 
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateEvaluationDto: UpdateEvaluationDto) {
-    return this.evaluationService.update(+id, updateEvaluationDto);
+    return this.evaluationService.update(id, updateEvaluationDto);
   }
 
   @Delete(':id')

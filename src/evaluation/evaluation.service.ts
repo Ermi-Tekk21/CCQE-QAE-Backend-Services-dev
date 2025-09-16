@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { CreateEvaluationDto } from './dto/agent-evaluation-dto/create-evaluation.dto';
 import { UpdateEvaluationDto } from './dto/agent-evaluation-dto/update-evaluation.dto';
 import { DataSource, EntityManager } from 'typeorm';
@@ -60,9 +60,16 @@ export class EvaluationService {
           }
           createdQuestionEvaluation.question = foundQuestion;
 
-          const foundQuestionAnswerOption = await entityManager.findOne(QuestionAnswerOp, { where: { id: question.selected_question_answer_option_id } });
+          const foundQuestionAnswerOption = await entityManager.findOne(QuestionAnswerOp, {
+            where: { id: question.selected_question_answer_option_id },
+            relations: ['question']
+          });
           if (!foundQuestionAnswerOption) {
             throw new NotFoundException(`Question answer option with id ${question.selected_question_answer_option_id} not found`);
+          }
+
+          if (foundQuestionAnswerOption.question.id != foundQuestion.id) {
+            throw new BadRequestException(`answer option with id ${foundQuestionAnswerOption.id} is not under question with id ${foundQuestion.id}`)
           }
           createdQuestionEvaluation.question_answerOP = foundQuestionAnswerOption
           audioResult += foundQuestionAnswerOption.weight
@@ -73,13 +80,14 @@ export class EvaluationService {
         await entityManager.save(EvalPerAudio, createdAudioEvaluation)
       }
       createdAgentEvaluation.result = agentResult
+      createdAgentEvaluation.updated_at = null
       entityManager.save(AgentEvaluation, createdAgentEvaluation)
       await entityManager.queryRunner?.commitTransaction()
 
       return {
         success: true,
         message: "Evaluation is successfully created.",
-        "created assignment": createdAgentEvaluation
+        "evaluation": createdAgentEvaluation
       }
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -98,8 +106,62 @@ export class EvaluationService {
     return `This action returns a #${id} evaluation`;
   }
 
-  update(id: number, updateEvaluationDto: UpdateEvaluationDto) {
-    return `This action updates a #${id} evaluation`;
+  async update(id: string, updateEvaluationDto: UpdateEvaluationDto) {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    const entityManager: EntityManager = queryRunner.manager;
+    try {
+      // check the agent evaluation using the incomming id
+      const agentEvaluation = await entityManager.findOne(AgentEvaluation, { where: { id } })
+      if (!agentEvaluation) {
+        throw new NotFoundException(`agent evaluation with ${id} not found`)
+      }
+      await entityManager.save(AgentEvaluation, agentEvaluation)
+      let newAgentResult = 0
+      for (const updateAudioEvaluationDto of updateEvaluationDto.audios) {
+        // check existance of evaluation per audio here
+        const evalPerAudio = await entityManager.findOne(EvalPerAudio, { where: { id: updateAudioEvaluationDto.audio_evaluation_id } })
+        if (!evalPerAudio) {
+          throw new NotFoundException(`evaluation per audio with ${updateAudioEvaluationDto.audio_evaluation_id} not found`)
+        }
+        let newAudioResult = 0
+        for (const updateQuestionEvaluationDto of updateAudioEvaluationDto.questions) {
+          // check existance of evaluation per question here
+          const evalPerQue = await entityManager.findOne(EvalPerQuestion, { where: { id: updateQuestionEvaluationDto.question_evaluation_id },
+          relations: ['eval_per_audio', 'question'] })
+          if (!evalPerQue) {
+            throw new NotFoundException(`evaluation per question for audio ${updateAudioEvaluationDto.audio_evaluation_id} with id ${updateQuestionEvaluationDto.question_evaluation_id} not found`)
+          } else if (evalPerQue.eval_per_audio.id != evalPerAudio.id) {
+            throw new BadRequestException(`evaluation per question and evaluation per audio missmatched, allignment issue occured.`)
+          }
+          const questionAnswerOP = await entityManager.findOne(QuestionAnswerOp, { where: { id: updateQuestionEvaluationDto.updated_selected_question_answer_option_id },
+          relations: ['question'] })
+          
+          if (!questionAnswerOP) {
+            throw new NotFoundException(`Question answer option with id ${updateQuestionEvaluationDto.updated_selected_question_answer_option_id} not found`);
+          } else if (questionAnswerOP.question.id != evalPerQue.question.id) {
+            throw new BadRequestException('answer option and question is mismatched, allignment issue occured.')
+          }
+          evalPerQue.question_answerOP = questionAnswerOP
+          newAudioResult += questionAnswerOP.weight
+          await entityManager.save(EvalPerQuestion, evalPerQue)
+        }
+        evalPerAudio.result = newAudioResult
+        await entityManager.save(EvalPerAudio, evalPerAudio)
+        newAgentResult += evalPerAudio.result
+      }
+      agentEvaluation.result = newAgentResult
+      await entityManager.save(AgentEvaluation, agentEvaluation)
+      await entityManager.queryRunner?.commitTransaction()
+
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      console.error(error)
+      throw error
+    } finally {
+      queryRunner.release();
+    }
   }
 
   async remove(id: string) {
