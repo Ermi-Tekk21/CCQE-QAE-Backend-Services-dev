@@ -5,7 +5,7 @@ import { UpdateEvaluationDto } from './dto/agent-evaluation-dto/update-evaluatio
 
 @Controller('evaluation')
 export class EvaluationController {
-  constructor(private readonly evaluationService: EvaluationService) {}
+  constructor(private readonly evaluationService: EvaluationService) { }
 
   @Post()
   create(@Body() createEvaluationDto: CreateEvaluationDto) {
@@ -19,9 +19,9 @@ export class EvaluationController {
 
   @Get(':id')
   findOne(@Param('id') id: string) {
-    return this.evaluationService.findOne(+id);
+    return this.evaluationService.findOne(id);
   }
- 
+
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateEvaluationDto: UpdateEvaluationDto) {
     return this.evaluationService.update(id, updateEvaluationDto);
@@ -30,5 +30,15 @@ export class EvaluationController {
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.evaluationService.remove(id);
+  }
+
+  @Patch('soft-delete/:id')
+  softDelete(@Param('id') id: string) {
+    return this.evaluationService.softDelete(id);
+  }
+
+  @Patch('restore-soft-delete/:id')
+  restoreSoftDelete(@Param('id') id: string) {
+    return this.evaluationService.restoreSoftDelete(id);
   }
 }

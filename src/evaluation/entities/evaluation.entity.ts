@@ -1,6 +1,6 @@
 import { agentEvalStatus } from "src/common/agent_evaluation.status";
 import { GroupQuestion } from "src/group-question/entities/group-question-entities/group-question.entity";
-import { Column, CreateDateColumn, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { Column, CreateDateColumn, DeleteDateColumn, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { EvalPerAudio } from "./evaluationPerAudio.entity";
 
 @Entity("agent_evaluation")
@@ -33,17 +33,14 @@ export class AgentEvaluation {
     @Column({ type: "uuid", nullable: true })
     deleted_by: string;
 
-    @CreateDateColumn()
+    @CreateDateColumn({ type: "timestamp" })
     created_at: Date
 
-    @UpdateDateColumn({
-        nullable: true,
-        default: null
-    })
+    @UpdateDateColumn({ type: "timestamp", nullable: true, default: null })
     updated_at: Date | null;
 
-    @Column({ type: "timestamp", nullable: true })
-    deleted_at: Date;
+    @DeleteDateColumn({ type: "timestamp", nullable: true, default: null })
+    deleted_at: Date | null;
 
     @ManyToOne(() => GroupQuestion, (group_question) => group_question.agent_evaluation)
     group_question: GroupQuestion
