@@ -30,7 +30,7 @@ export class EvaluationService {
 
       const groupQuestion = await entityManager.findOne(GroupQuestion, {
         where: {
-          is_active: false // later i will change it to true
+          is_active: true
         }
       })
 
