@@ -17,67 +17,84 @@ export class QuestionLookupService {
         try {
             const doesExist = await this.questionLookupRepo.findOne({ where: { content: createQuestionLookupDto.content } })
             if (doesExist) {
-                throw new HttpException('duplicate entry', 400)
+                throw new HttpException('duplicate entry, this question already created', 400)
             }
             const ansOP = this.questionLookupRepo.create(createQuestionLookupDto)
+            ansOP.updated_at = null
             await this.questionLookupRepo.save(ansOP)
-            return { message: "question lookup created successfully", ansOP }
+            return {
+                success: true,
+                message: "question lookup created successfully",
+                ansOP
+            }
         } catch (error) {
             if (error instanceof HttpException) {
                 throw error
+            } else {
+                console.error(error)
+                throw new InternalServerErrorException("Error ocucured during creating question lookup")
             }
-            console.error(error)
-            throw new InternalServerErrorException("Error ocucured during creating question lookup")
+
         }
     }
 
     async findAll() {
-        return await this.questionLookupRepo.find()
+        const questions = await this.questionLookupRepo.find()
+        return {
+            success: true,
+            questions
+        }
     }
 
     async findOne(id: string) {
         try {
-            const questionL = await this.questionLookupRepo.findOne({ where: { id: id } })
+            const questionL = await this.questionLookupRepo.findOne({ where: { id: id }, withDeleted: true })
             if (!questionL) {
                 throw new NotFoundException("question lookup not found")
+            } else if (questionL.is_deleted) {
+                throw new BadRequestException("question lookup is soft deleted");
             }
-            return questionL
+            return {
+                success: true,
+                "question lookup": questionL
+            }
         } catch (error) {
-            if (error instanceof NotFoundException) {
+            if (error instanceof NotFoundException || error instanceof BadRequestException) {
                 throw error
+            } else {
+                console.error(error);
+                throw new InternalServerErrorException("Error occurred during finding the question lookup");
             }
-            throw new InternalServerErrorException("Error occurred during finding the question lookup");
         }
     }
 
 
     async update(id: string, updateQuestionLookupDto: UpdateQuestionLookupDto) {
         try {
-            const questionL = await this.findOne(id)
+            const { ['question lookup']: questionL } = await this.findOne(id)
             const updated = this.questionLookupRepo.merge(questionL, updateQuestionLookupDto)
 
             updated.updated_at = new Date()
 
             await this.questionLookupRepo.save(updated)
 
-            return { message: "question lookup updated successfully", updated }
+            return {
+                success: true,
+                message: "question lookup updated successfully",
+                updated
+            }
         } catch (error) {
             if (error instanceof NotFoundException) {
                 throw error;
+            } else {
+                throw new InternalServerErrorException("Error occured during updeting question lookup")
             }
-            throw new InternalServerErrorException("Error occured during updeting question lookup")
         }
     }
 
-
-
     async softDelete(id: string) {
         try {
-            const questionL = await this.findOne(id);
-
-            if (questionL.is_deleted) {
-                throw new BadRequestException("question lookup is already deleted");
-            }
+            const { ['question lookup']: questionL } = await this.findOne(id)
 
             await this.questionLookupRepo.softDelete(id)
             questionL.is_deleted = true;
@@ -86,21 +103,25 @@ export class QuestionLookupService {
             await this.questionLookupRepo.save(questionL);
 
             return {
+                success: true,
                 message: "question lookup soft-deleted successfully",
                 questionL,
             };
         } catch (error) {
             if (error instanceof BadRequestException || error instanceof NotFoundException) {
                 throw error;
+            } else {
+                throw new InternalServerErrorException("Error occurred during soft deletion");
             }
-            throw new InternalServerErrorException("Error occurred during soft deletion");
         }
     }
 
     async restoreSoftDelete(id: string) {
         try {
-            const questionL = await this.findOne(id)
-            if (!questionL.is_deleted) {
+            const questionL = await this.questionLookupRepo.findOne({ where: { id: id }, withDeleted: true })
+            if (!questionL) {
+                throw new NotFoundException("question lookup not found")
+            } else if (!questionL.is_deleted) {
                 throw new BadRequestException("restored or non-deleted question lookup")
             }
             questionL.is_deleted = false
@@ -110,19 +131,30 @@ export class QuestionLookupService {
         } catch (error) {
             if (error instanceof BadRequestException || error instanceof NotFoundException) {
                 throw error;
+            } else {
+                throw new HttpException("error happend during restoring soft delete", 500)
             }
-            throw new HttpException("error happend during restoring soft delete", 500)
         }
     }
 
     async remove(id: string) {
         try {
-            await this.findOne(id)
+            const deletedquestionLookup = await this.findOne(id)
             await this.questionLookupRepo.delete(id)
-            return { message: "question lookup successfully deleted" }
+            return {
+                success: true,
+                message: "question lookup successfully deleted",
+                "deleted question lookup": deletedquestionLookup
+            }
         } catch (error) {
-            if (error instanceof NotFoundException) { throw error }
-            throw new HttpException('Failed to delete question lookup', error.status);
+            if (error instanceof NotFoundException || error instanceof BadRequestException) {
+                throw error
+            } else if (error.code == 23503) {
+                throw new BadRequestException('this question lookup is linked to group question created before.')
+            } else {
+                console.error(error);
+                throw new HttpException('Failed to delete question lookup', error.status);
+            }
         }
     }
 }
