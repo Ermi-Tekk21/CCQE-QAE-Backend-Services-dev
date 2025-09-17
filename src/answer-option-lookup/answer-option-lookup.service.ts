@@ -16,33 +16,49 @@ export class AnswerOptionLookupService {
         try {
             const doesExist = await this.answerOptionLookupRepo.findOne({ where: { content: createAnswerOptionLookupDto.content } })
             if (doesExist) {
-                throw new HttpException('duplicate entry', 400)
+                throw new HttpException('duplicate entry, this answer option already created', 400)
             }
             const ansOP = this.answerOptionLookupRepo.create(createAnswerOptionLookupDto)
+            ansOP.updated_at = null
             await this.answerOptionLookupRepo.save(ansOP)
-            return { message: "Answer option lookup created successfully", ansOP }
+            return {
+                success: true,
+                message: "Answer option lookup created successfully",
+                ansOP
+            }
         } catch (error) {
             if (error instanceof HttpException) {
                 throw error
+            } else {
+                console.error(error)
+                throw new InternalServerErrorException("Error ocucured during creating answer option lookup")
             }
-            console.error(error)
-            throw new InternalServerErrorException("Error ocucured during creating answer option lookup")
+
         }
     }
 
     async findAll() {
-        return await this.answerOptionLookupRepo.find()
+        const ansOPs = await this.answerOptionLookupRepo.find()
+        return {
+            success: true,
+            "lookup answer options": ansOPs
+        }
     }
 
     async findOne(id: string) {
         try {
-            const ansOP = await this.answerOptionLookupRepo.findOne({ where: { id: id } })
+            const ansOP = await this.answerOptionLookupRepo.findOne({ where: { id: id }, withDeleted: true })
             if (!ansOP) {
                 throw new NotFoundException("answer option lookup not found")
+            } else if (ansOP.is_deleted) {
+                throw new BadRequestException("answer option lookup is soft deleted");
             }
-            return ansOP
+            return {
+                success: true,
+                "lookup answer option": ansOP
+            }
         } catch (error) {
-            if (error instanceof NotFoundException) {
+            if (error instanceof NotFoundException || error instanceof BadRequestException) {
                 throw error
             }
             throw new InternalServerErrorException("Error occurred during finding the answer option lookup");
@@ -51,14 +67,18 @@ export class AnswerOptionLookupService {
 
     async update(id: string, updateAnswerOptionLookupDto: UpdateAnswerOptionLookupDto) {
         try {
-            const ansOP = await this.findOne(id)
+            const { ['lookup answer option']: ansOP } = await this.findOne(id)
             const updated = this.answerOptionLookupRepo.merge(ansOP, updateAnswerOptionLookupDto)
 
             updated.updated_at = new Date()
 
             await this.answerOptionLookupRepo.save(updated)
 
-            return { message: "answer option lookup updated successfully", updated }
+            return {
+                sucess: true,
+                message: "answer option lookup updated successfully",
+                updated
+            }
         } catch (error) {
             if (error instanceof NotFoundException) {
                 throw error;
@@ -70,11 +90,7 @@ export class AnswerOptionLookupService {
 
     async softDelete(id: string) {
         try {
-            const ansOP = await this.findOne(id);
-
-            if (ansOP.is_deleted) {
-                throw new BadRequestException("answer option lookup is already deleted");
-            }
+            const { ['lookup answer option']: ansOP } = await this.findOne(id);
 
             await this.answerOptionLookupRepo.softDelete(id)
             ansOP.is_deleted = true;
@@ -90,14 +106,17 @@ export class AnswerOptionLookupService {
             if (error instanceof BadRequestException || error instanceof NotFoundException) {
                 throw error;
             }
+            console.error(error)
             throw new InternalServerErrorException("Error occurred during soft deletion");
         }
     }
 
     async restoreSoftDelete(id: string) {
         try {
-            const ansOP = await this.findOne(id)
-            if (!ansOP.is_deleted) {
+            const ansOP = await this.answerOptionLookupRepo.findOne({ where: { id: id }, withDeleted: true })
+            if (!ansOP) {
+                throw new NotFoundException("answer option lookup not found")
+            } else if (!ansOP.is_deleted) {
                 throw new BadRequestException("restored or non-deleted answer option lookup")
             }
             ansOP.is_deleted = false
@@ -114,12 +133,22 @@ export class AnswerOptionLookupService {
 
     async remove(id: string) {
         try {
-            await this.findOne(id)
+            const deletedAnswerOptionLookUp = await this.findOne(id)
             await this.answerOptionLookupRepo.delete(id)
-            return { message: "answer option lookup successfully deleted" }
+            return {
+                success: true,
+                message: "answer option lookup successfully deleted",
+                "deleted answer option lookup": deletedAnswerOptionLookUp
+            }
         } catch (error) {
-            if (error instanceof NotFoundException) { throw error }
-            throw new HttpException('Failed to delete answer option lookup', error.status);
+            if (error instanceof NotFoundException) {
+                throw error
+            } else if (error.code == 23503) {
+                throw new BadRequestException('this answer option is linked to group question created before.')
+            } else {
+                console.error(error);
+                throw new InternalServerErrorException('Failed to delete answer option lookup');
+            }
         }
     }
 }
