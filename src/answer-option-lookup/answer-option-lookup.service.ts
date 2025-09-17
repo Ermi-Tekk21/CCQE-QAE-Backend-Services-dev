@@ -60,8 +60,9 @@ export class AnswerOptionLookupService {
         } catch (error) {
             if (error instanceof NotFoundException || error instanceof BadRequestException) {
                 throw error
+            } else {
+                throw new InternalServerErrorException("Error occurred during finding the answer option lookup");
             }
-            throw new InternalServerErrorException("Error occurred during finding the answer option lookup");
         }
     }
 
@@ -82,8 +83,10 @@ export class AnswerOptionLookupService {
         } catch (error) {
             if (error instanceof NotFoundException) {
                 throw error;
+            } else {
+                console.error(error);
+                throw new InternalServerErrorException("Error occured during updeting answer option lookup")
             }
-            throw new InternalServerErrorException("Error occured during updeting answer option lookup")
         }
     }
 
@@ -99,15 +102,17 @@ export class AnswerOptionLookupService {
             await this.answerOptionLookupRepo.save(ansOP);
 
             return {
+                success: true,
                 message: "answeroption lookup soft-deleted successfully",
                 ansOP,
             };
         } catch (error) {
             if (error instanceof BadRequestException || error instanceof NotFoundException) {
                 throw error;
+            } else {
+                console.error(error)
+                throw new InternalServerErrorException("Error occurred during soft deletion");
             }
-            console.error(error)
-            throw new InternalServerErrorException("Error occurred during soft deletion");
         }
     }
 
@@ -122,12 +127,17 @@ export class AnswerOptionLookupService {
             ansOP.is_deleted = false
             ansOP.deleted_at = null
             await this.answerOptionLookupRepo.save(ansOP)
-            return { message: "answer option lookup is restored successfully", ansOP }
+            return {
+                success: true,
+                message: "answer option lookup is restored successfully",
+                "answer option": ansOP
+            }
         } catch (error) {
             if (error instanceof BadRequestException || error instanceof NotFoundException) {
                 throw error;
+            } else {
+                throw new HttpException("error happend during restoring soft delete", 500)
             }
-            throw new HttpException("error happend during restoring soft delete", 500)
         }
     }
 
@@ -141,10 +151,10 @@ export class AnswerOptionLookupService {
                 "deleted answer option lookup": deletedAnswerOptionLookUp
             }
         } catch (error) {
-            if (error instanceof NotFoundException) {
+            if (error instanceof NotFoundException || error instanceof BadRequestException) {
                 throw error
             } else if (error.code == 23503) {
-                throw new BadRequestException('this answer option is linked to group question created before.')
+                throw new BadRequestException('this answer option lookup is linked to group question created before.')
             } else {
                 console.error(error);
                 throw new InternalServerErrorException('Failed to delete answer option lookup');
