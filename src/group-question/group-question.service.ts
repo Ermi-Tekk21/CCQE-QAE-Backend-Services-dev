@@ -42,15 +42,15 @@ export class GroupQuestionService {
       const year = currentDate.getFullYear().toString();
       const groupQuestionName = `${month}/${year}/EP`;
 
-      // const doesOtherExistWithnThisMonth = await entityManager.findOne(GroupQuestion, {
-      //   where: { name: groupQuestionName, is_deleted: false },
-      // });
-      // if (doesOtherExistWithnThisMonth) {
-      //   throw new HttpException(
-      //     `You can't create more than one group question for the month of ${month} ${year}.`,
-      //     HttpStatus.BAD_REQUEST,
-      //   );
-      // }
+      const doesOtherExistWithnThisMonth = await entityManager.findOne(GroupQuestion, {
+        where: { name: groupQuestionName, is_deleted: false },
+      });
+      if (doesOtherExistWithnThisMonth) {
+        throw new HttpException(
+          `You can't create more than one group question for the month of ${month} ${year}.`,
+          HttpStatus.BAD_REQUEST,
+        );
+      }
 
       // Create the GroupQuestion entity instance in memory.
       let group_question = entityManager.create(GroupQuestion, createGroupQuestionDto);
