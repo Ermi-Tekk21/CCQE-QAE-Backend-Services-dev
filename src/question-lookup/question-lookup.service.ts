@@ -124,6 +124,8 @@ export class QuestionLookupService {
             } else if (!questionL.is_deleted) {
                 throw new BadRequestException("restored or non-deleted question lookup")
             }
+
+            await this.questionLookupRepo.restore(id)
             questionL.is_deleted = false
             questionL.deleted_at = null
             await this.questionLookupRepo.save(questionL)

@@ -24,7 +24,7 @@ export class AnswerOptionLookupService {
             return {
                 success: true,
                 message: "Answer option lookup created successfully",
-                ansOP
+                "answer option": ansOP
             }
         } catch (error) {
             if (error instanceof HttpException) {
@@ -61,6 +61,7 @@ export class AnswerOptionLookupService {
             if (error instanceof NotFoundException || error instanceof BadRequestException) {
                 throw error
             } else {
+                console.error(error);
                 throw new InternalServerErrorException("Error occurred during finding the answer option lookup");
             }
         }
@@ -104,7 +105,7 @@ export class AnswerOptionLookupService {
             return {
                 success: true,
                 message: "answeroption lookup soft-deleted successfully",
-                ansOP,
+                "soft deleted ansOP": ansOP,
             };
         } catch (error) {
             if (error instanceof BadRequestException || error instanceof NotFoundException) {
@@ -124,6 +125,8 @@ export class AnswerOptionLookupService {
             } else if (!ansOP.is_deleted) {
                 throw new BadRequestException("restored or non-deleted answer option lookup")
             }
+
+            await this.answerOptionLookupRepo.restore(id)
             ansOP.is_deleted = false
             ansOP.deleted_at = null
             await this.answerOptionLookupRepo.save(ansOP)
@@ -136,6 +139,7 @@ export class AnswerOptionLookupService {
             if (error instanceof BadRequestException || error instanceof NotFoundException) {
                 throw error;
             } else {
+                console.error(error);
                 throw new HttpException("error happend during restoring soft delete", 500)
             }
         }
@@ -148,7 +152,7 @@ export class AnswerOptionLookupService {
             return {
                 success: true,
                 message: "answer option lookup successfully deleted",
-                "deleted answer option lookup": deletedAnswerOptionLookUp
+                "deleted answer option lookup": deletedAnswerOptionLookUp['lookup answer option']
             }
         } catch (error) {
             if (error instanceof NotFoundException || error instanceof BadRequestException) {
