@@ -4,7 +4,7 @@ import { Question } from "../question-entities/question.entity";
 import { EvalPerQuestion } from "src/evaluation/entities/evaluationPerQuestion.entity";
 import { Exclude } from "class-transformer";
 
-@Entity("question_and_answer_option")
+@Entity("question_answerOp")
 export class QuestionAnswerOp {
     @PrimaryGeneratedColumn("uuid")
     id: string
