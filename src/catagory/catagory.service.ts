@@ -16,22 +16,32 @@ export class CatagoryService {
     try {
       const doesExist = await this.catagoryRepo.findOne({ where: { name: createCatagoryDto.name } })
       if (doesExist) {
-        throw new HttpException("duplicate entry", 400)
+        throw new HttpException("duplicate entry, this catagory already created", 400)
       }
       const catagory = this.catagoryRepo.create(createCatagoryDto)
+      catagory.updated_at = null
       await this.catagoryRepo.save(catagory)
-      return { message: "Catagory successfully created", catagory }
+      return {
+        success: true,
+        message: "Catagory successfully created",
+        catagory
+      }
     } catch (error) {
       if (error instanceof HttpException) {
         throw error
+      } else {
+        throw new InternalServerErrorException("Error occured during creating catagory")
       }
-      throw new InternalServerErrorException("Error occured during creating catagory")
     }
   }
 
   async findAll() {
     try {
-      return await this.catagoryRepo.find()
+      const catagories = await this.catagoryRepo.find()
+      return {
+        success: true,
+        catagories
+      }
     } catch {
       throw new InternalServerErrorException("somthing bad happend")
     }
@@ -39,14 +49,11 @@ export class CatagoryService {
 
   async findOne(id: string) {
     try {
-      const catagory = await this.catagoryRepo.findOne({ where: { id: id } })
+      const catagory = await this.catagoryRepo.findOne({ where: { id: id }, withDeleted: true })
       if (!catagory) {
-        const isDeleted = await this.catagoryRepo.findOne({ where: { id }, withDeleted: true })
-        if (isDeleted) {
-          throw new BadRequestException("Category is already soft deleted");
-        } else {
-          throw new NotFoundException("Category not found")
-        }
+        throw new NotFoundException("Category not found")
+      } else if (catagory.is_deleted) {
+        throw new BadRequestException(`catagory with id ${id} is soft deleted`)
       }
       return {
         success: true,
@@ -55,8 +62,12 @@ export class CatagoryService {
     } catch (error) {
       if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error
+      } else if (error.code == "22P02") {
+        throw new HttpException("invalid catagory uuid", 400)
+      } else {
+        console.error(error);
+        throw new InternalServerErrorException("Error occurred during looking for specified catagory");
       }
-      throw new InternalServerErrorException("Error occurred during looking for specified catagory");
     }
   }
 
@@ -69,32 +80,36 @@ export class CatagoryService {
 
       await this.catagoryRepo.save(updated);
 
-      return { message: "Catagory updated successfully", updated }
+      return {
+        success: true,
+        message: "Catagory updated successfully",
+        "updated catagory": updated
+      }
     }
     catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
+      } else {
+        console.error(error);
+        throw new InternalServerErrorException("Error occured during updeting catagories")
       }
-      throw new InternalServerErrorException("Error occured during updeting catagories")
     }
   }
 
   async softDelete(id: string) {
     try {
-      const result = await this.findOne(id);
-      const category = result.catagory;
+      const { catagory } = await this.findOne(id);
 
       await this.catagoryRepo.softDelete(id)
+      catagory.is_deleted = true
+      catagory.deleted_at = new Date()
 
-      category.is_deleted = true
-      category.deleted_at = new Date()
-
-      await this.catagoryRepo.save(category);
+      await this.catagoryRepo.save(catagory);
 
       return {
         success: true,
         message: "Category soft-deleted successfully",
-        "temp deleted catagory": category,
+        "soft deleted catagory": catagory,
       };
     } catch (error) {
       if (error instanceof BadRequestException || error instanceof NotFoundException || error instanceof HttpException) {
@@ -108,52 +123,56 @@ export class CatagoryService {
     try {
       const catagory = await this.catagoryRepo.findOne({ where: { id }, withDeleted: true })
 
-      if (!catagory?.is_deleted) {
+      if (!catagory) {
+        throw new NotFoundException("catagory not found")
+      } else if (!catagory.is_deleted) {
         throw new BadRequestException("already restored or not soft deleted catagory")
       }
+
       await this.catagoryRepo.restore(id);
-
-      const restoredCatagoryEntity = await this.catagoryRepo.findOne({ where: { id } });
-
-      if (restoredCatagoryEntity) {
-        restoredCatagoryEntity.is_deleted = false;
-        restoredCatagoryEntity.deleted_at = null;
-        await this.catagoryRepo.save(restoredCatagoryEntity);
-      }
+      catagory.is_deleted = false
+      catagory.deleted_at = null
+      await this.catagoryRepo.save(catagory)
 
       return {
         success: true,
         message: "Catagory is restored successfully",
-        "restored catagory": restoredCatagoryEntity
+        "restored catagory": catagory
       }
     } catch (error) {
       if (error instanceof BadRequestException || error instanceof NotFoundException) {
         throw error;
+      } else if (error.code == "22P02") {
+        throw new HttpException("invalid catagory uuid", 400)
+      } else {
+        throw new HttpException("error happend during restoring soft delete", 500)
       }
-      throw new HttpException("error happend during restoring soft delete", 500)
     }
   }
 
   async remove(id: string): Promise<{
     success: boolean,
     message: string,
+    "deleted catagory": object
   }> {
     try {
-      await this.findOne(id);
-
+      const deletedCatagory = await this.findOne(id);
       await this.catagoryRepo.delete(id);
-
       return {
         success: true,
         message: "Category successfully deleted",
+        "deleted catagory": deletedCatagory.catagory
       }
     } catch (error) {
-      if (error instanceof NotFoundException) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error
+      } else if (error.code == "22P02") {
+        throw new HttpException("invalid catagory uuid", 400)
       } else if (error.code == 23503) {
         throw new BadRequestException("this catagory id is referenced in question table")
+      } else {
+        throw new HttpException('Failed to delete catagory', HttpStatus.INTERNAL_SERVER_ERROR);
       }
-      throw new HttpException('Failed to delete catagory', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 }
