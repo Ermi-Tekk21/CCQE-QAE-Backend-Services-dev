@@ -17,6 +17,333 @@ export class GroupQuestionService {
     private readonly dataSource: DataSource,
   ) { }
 
+  private async validateGroupQuestionCreation(
+    entityManager: EntityManager,
+    createGroupQuestionDto: CreateGroupQuestionDto,
+  ): Promise<void> {
+    // 1. Check if an active GroupQuestion already exists.
+    const doesActiveExist = await entityManager.findOne(GroupQuestion, {
+      where: { is_active: true, is_deleted: false },
+    });
+    if (doesActiveExist) {
+      throw new HttpException(
+        "You can't create a new group question before the active one is completed.",
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    // 2. Check for an existing GroupQuestion for the current month.
+    const currentDate = new Date();
+    const month = currentDate.toLocaleString('en-US', { month: 'short' });
+    const year = currentDate.getFullYear().toString();
+    const groupQuestionName = `oct/${year}/EP`;
+    // const groupQuestionName = `${month}/${year}/EP`;
+
+    const doesOtherExistWithnThisMonth = await entityManager.findOne(GroupQuestion, {
+      where: { name: groupQuestionName, is_deleted: false },
+    });
+    if (doesOtherExistWithnThisMonth) {
+      throw new HttpException(
+        `You can't create more than one group question for the month of ${month} ${year}.`,
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
+
+  private async createAndSaveGroupQuestion(
+    entityManager: EntityManager,
+    createGroupQuestionDto: CreateGroupQuestionDto,
+  ): Promise<GroupQuestion> {
+    // Determine the version
+    const max = await entityManager
+      .createQueryBuilder(GroupQuestion, 'group_question')
+      .select('MAX(group_question.version)', 'max')
+      .getRawOne();
+
+    // Calculate sum of question weights
+    let sumOfQuestionWeights = 0;
+    if (createGroupQuestionDto.questions && createGroupQuestionDto.questions.length > 0) {
+      for (const queData of createGroupQuestionDto.questions) {
+        sumOfQuestionWeights += queData.weight;
+      }
+    }
+
+    // Create the GroupQuestion entity instance in memory.
+    const createdByUserId = createGroupQuestionDto.created_by;
+    const currentDate = new Date();
+    const month = currentDate.toLocaleString('en-US', { month: 'short' });
+    const year = currentDate.getFullYear().toString();
+    const groupQuestionName = `${month}/${year}/EP`;
+
+    let group_question = entityManager.create(GroupQuestion, createGroupQuestionDto);
+    group_question.name = groupQuestionName;
+    group_question.status = groupQuestionStatus.DRAFT;
+    group_question.created_by = createdByUserId;
+    group_question.evaluation_ends_at = createGroupQuestionDto.evaluation_ends_at;
+    group_question.version = (Number(max.max || 0) + 0.1).toFixed(1);
+    group_question.weight = sumOfQuestionWeights;
+
+    // Save the GroupQuestion and return the managed instance.
+    return await entityManager.save(GroupQuestion, group_question);
+  }
+
+  private findRemovedQuestions(
+    parentQuestionMap: Map<string, any>,
+    currentQuestionMap: Map<string, any>,
+  ): { content: string }[] {
+    const removed: { content: string }[] = [];
+    for (const parentQ of parentQuestionMap.values()) {
+      if (!currentQuestionMap.has(parentQ.question_lookup.content)) {
+        removed.push({ content: parentQ.question_lookup.content });
+      }
+    }
+    return removed;
+  }
+
+  private findAddedAndModifiedQuestions(
+    parentQuestionMap: Map<string, any>,
+    currentQuestions: any[],
+  ): {
+    added: { content: string; weight: number }[];
+    modified: {
+      content: string;
+      changes: {
+        questionWeight?: { from: number; to: number };
+        answerOptions?: {
+          added: { content: string; weight: number }[];
+          removed: { content: string; weight: number }[];
+          modified: { content: string; weight: { from: number; to: number } }[];
+        };
+      };
+    }[];
+  } {
+    const added: { content: string; weight: number }[] = [];
+    const modified: any[] = [];
+
+    for (const currentQ of currentQuestions) {
+      const parentQ = parentQuestionMap.get(currentQ.content);
+
+      if (!parentQ) {
+        // New question
+        added.push({ content: currentQ.content, weight: currentQ.weight });
+      } else {
+        // Check for modifications
+        const modifiedQuestion = this.findQuestionModifications(parentQ, currentQ);
+        if (modifiedQuestion) {
+          modified.push(modifiedQuestion);
+        }
+      }
+    }
+
+    return { added, modified };
+  }
+
+  private findQuestionModifications(
+    parentQ: any,
+    currentQ: any
+  ): {
+    content: string;
+    changes: {
+      questionWeight?: { from: number; to: number };
+      answerOptions?: {
+        added: { content: string; weight: number }[];
+        removed: { content: string; weight: number }[];
+        modified: { content: string; weight: { from: number; to: number } }[];
+      };
+    };
+  } | null {
+    const modifiedQuestion: {
+      content: string;
+      changes: {
+        questionWeight?: { from: number; to: number };
+        answerOptions?: {
+          added: { content: string; weight: number }[];
+          removed: { content: string; weight: number }[];
+          modified: { content: string; weight: { from: number; to: number } }[];
+        };
+      };
+    } = { content: currentQ.content, changes: {} };
+    let isModified = false;
+
+    if (currentQ.weight !== parentQ.weight) {
+      modifiedQuestion.changes.questionWeight = { from: parentQ.weight, to: currentQ.weight };
+      isModified = true;
+    }
+
+    const answerOpChanges = this.compareAnswerOptions(parentQ.question_answer_option, currentQ.question_answer_option);
+
+    if (answerOpChanges.added.length > 0 || answerOpChanges.removed.length > 0 || answerOpChanges.modified.length > 0) {
+      modifiedQuestion.changes.answerOptions = answerOpChanges;
+      isModified = true;
+    }
+
+    return isModified ? modifiedQuestion : null;
+  }
+
+  private compareQuestionsAndGenerateChanges(
+    parentQuestions: any[],
+    currentQuestions: any[],
+  ): {
+    added: { content: string; weight: number }[];
+    removed: { content: string }[];
+    modified: {
+      content: string;
+      changes: {
+        questionWeight?: { from: number; to: number };
+        answerOptions?: {
+          added: { content: string; weight: number }[];
+          removed: { content: string; weight: number }[];
+          modified: { content: string; weight: { from: number; to: number } }[];
+        };
+      };
+    }[];
+  } {
+    const parentQuestionMap = new Map(parentQuestions.map(q => [q.question_lookup.content, q]));
+    const currentQuestionMap = new Map(currentQuestions.map(q => [q.content, q]));
+
+    const removed = this.findRemovedQuestions(parentQuestionMap, currentQuestionMap);
+    const { added, modified } = this.findAddedAndModifiedQuestions(parentQuestionMap, currentQuestions);
+
+    return { added, removed, modified };
+  }
+
+  private compareAnswerOptions(parentOps: any[], currentOps: any[]): {
+    added: { content: string; weight: number }[];
+    removed: { content: string; weight: number }[];
+    modified: { content: string; weight: { from: number; to: number } }[];
+  } {
+    const changes: {
+      added: { content: string; weight: number }[];
+      removed: { content: string; weight: number }[];
+      modified: { content: string; weight: { from: number; to: number } }[];
+    } = { added: [], removed: [], modified: [] };
+    const parentAnswerOpsMap = new Map((parentOps || []).map(qao => [qao.answer_option_lookup.content, qao]));
+    const currentAnswerOpsMap = new Map((currentOps || []).map(qao => [qao.content, qao]));
+
+    // Check for added, removed, and modified answer options
+    for (const [content, currentQao] of currentAnswerOpsMap) {
+      const parentQao = parentAnswerOpsMap.get(content);
+      if (!parentQao) {
+        changes.added.push({ content: content, weight: currentQao.weight });
+      } else if (currentQao.weight !== parentQao.weight) {
+        changes.modified.push({ content: content, weight: { from: parentQao.weight, to: currentQao.weight } });
+      }
+    }
+
+    for (const [content, parentQao] of parentAnswerOpsMap) {
+      if (!currentAnswerOpsMap.has(content)) {
+        changes.removed.push({ content, weight: parentQao.weight });
+      }
+    }
+
+    return changes;
+  }
+
+  private async handleParentAndVersionChanges(
+    entityManager: EntityManager,
+    savedGroupQuestion: GroupQuestion,
+    createGroupQuestionDto: CreateGroupQuestionDto,
+  ): Promise<void> {
+    if (!createGroupQuestionDto.parentId) {
+      return;
+    }
+
+    const parent = await entityManager.findOne(GroupQuestion, {
+      where: { id: createGroupQuestionDto.parentId },
+      relations: ['question', 'question.question_lookup', 'question.question_answer_option', 'question.question_answer_option.answer_option_lookup'],
+    });
+
+    if (!parent) {
+      throw new HttpException('Parent group question not found.', HttpStatus.NOT_FOUND);
+    }
+
+    savedGroupQuestion.parent = parent;
+
+    const changes = this.compareQuestionsAndGenerateChanges(parent.question, createGroupQuestionDto.questions);
+
+    const currentDate = new Date();
+    const month = currentDate.toLocaleString('en-US', { month: 'short' });
+    const year = currentDate.getFullYear().toString();
+
+    const versionChangesDetail = entityManager.create(VersionChangesDetail, {
+      group_question: savedGroupQuestion,
+      year: year,
+      month: month,
+      changed_question_detail: changes,
+    });
+
+    await entityManager.save(versionChangesDetail);
+    await entityManager.save(GroupQuestion, savedGroupQuestion);
+  }
+
+  private async processNestedQuestions(
+    entityManager: EntityManager,
+    savedGroupQuestion: GroupQuestion,
+    questionsDto: any[], // Use a more specific DTO type here if available
+  ): Promise<void> {
+    if (!questionsDto || questionsDto.length === 0) {
+      return; // No questions to process
+    }
+
+    for (const queData of questionsDto) {
+      // Find or create QuestionLookup
+      let questionLookup = await entityManager.findOne(QuestionLookup, { where: { content: queData.content } });
+      if (!questionLookup) {
+        questionLookup = entityManager.create(QuestionLookup, { content: queData.content, created_by: queData.created_by, is_deleted: false });
+        await entityManager.save(QuestionLookup, questionLookup);
+      }
+
+      // Find Category
+      const catagoryEntity = await entityManager.findOne(Catagory, { where: { id: queData.catagoryId } });
+      if (!catagoryEntity) {
+        throw new HttpException('Catagory not found.', HttpStatus.NOT_FOUND);
+      }
+
+      // Create and save new Question
+      const newQuestion = entityManager.create(Question, {
+        content: queData.content,
+        catagory: catagoryEntity,
+        group_question: savedGroupQuestion,
+        question_lookup: questionLookup,
+        is_deleted: false,
+        created_by: queData.created_by,
+        weight: queData.weight,
+      });
+      await entityManager.save(Question, newQuestion);
+
+      // Process and save nested Answer Options
+      const createdQAO: QuestionAnswerOp[] = [];
+      for (const ansData of queData.question_answer_option) {
+        let answerOption = await entityManager.findOne(AnswerOptionLookup, { where: { content: ansData.content } });
+        if (!answerOption) {
+          answerOption = entityManager.create(AnswerOptionLookup, { content: ansData.content, created_by: queData.created_by, is_deleted: false });
+          await entityManager.save(AnswerOptionLookup, answerOption);
+        }
+
+        const qao = entityManager.create(QuestionAnswerOp, {
+          question: newQuestion,
+          answer_option_lookup: answerOption,
+          weight: ansData.weight,
+          is_deleted: false,
+          created_by: queData.created_by,
+        });
+        createdQAO.push(qao);
+        await entityManager.save(QuestionAnswerOp, qao);
+      }
+
+      // Update question with created answer options and group question
+      newQuestion.question_answer_option = createdQAO;
+      await entityManager.save(Question, newQuestion);
+
+      // Update the savedGroupQuestion with the new question
+      if (!savedGroupQuestion.question) {
+        savedGroupQuestion.question = [];
+      }
+      savedGroupQuestion.question.push(newQuestion);
+      await entityManager.save(GroupQuestion, savedGroupQuestion);
+    }
+  }
+
   async create(createGroupQuestionDto: CreateGroupQuestionDto) {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -25,248 +352,23 @@ export class GroupQuestionService {
     const entityManager: EntityManager = queryRunner.manager;
 
     try {
-      const createdByUserId = createGroupQuestionDto.created_by;
+      // step 1
+      await this.validateGroupQuestionCreation(entityManager, createGroupQuestionDto);  // checked and working
+      // step 2
+      const savedGroupQuestion = await this.createAndSaveGroupQuestion(entityManager, createGroupQuestionDto);
 
-      const doesActiveExist = await entityManager.findOne(GroupQuestion, {
-        where: { is_active: true, is_deleted: false },
-      });
-      if (doesActiveExist) {
-        throw new HttpException(
-          "You can't create a new group question before the active one is completed.",
-          HttpStatus.BAD_REQUEST,
-        );
-      }
-
-      const currentDate = new Date();
-      const month = currentDate.toLocaleString('en-US', { month: 'short' });
-      const year = currentDate.getFullYear().toString();
-      const groupQuestionName = `${month}/${year}/EP`;
-
-      const doesOtherExistWithnThisMonth = await entityManager.findOne(GroupQuestion, {
-        where: { name: groupQuestionName, is_deleted: false },
-      });
-      if (doesOtherExistWithnThisMonth) {
-        throw new HttpException(
-          `You can't create more than one group question for the month of ${month} ${year}.`,
-          HttpStatus.BAD_REQUEST,
-        );
-      }
-
-      // Create the GroupQuestion entity instance in memory.
-      let group_question = entityManager.create(GroupQuestion, createGroupQuestionDto);
-      group_question.name = groupQuestionName;
-      group_question.status = groupQuestionStatus.DRAFT;
-      group_question.created_by = createdByUserId;
-      group_question.evaluation_ends_at = createGroupQuestionDto.evaluation_ends_at;
-
-      // Determine the version (assuming `max` is intended to be for `GroupQuestion` itself)
-      // Note: This block was already in your code.
-      const max = await entityManager
-        .createQueryBuilder(GroupQuestion, 'group_question')
-        .select('MAX(group_question.version)', 'max')
-        .getRawOne();
-      group_question.version = (Number(max.max || 0) + 0.1).toFixed(1);
-
-      // Calculate sum of question weights from the DTO's questions array.
-      let sumOfQuestionWeights = 0;
-      if (createGroupQuestionDto.questions && createGroupQuestionDto.questions.length > 0) {
-        for (const queData of createGroupQuestionDto.questions) {
-          sumOfQuestionWeights += queData.weight;
-        }
-      }
-      group_question.weight = sumOfQuestionWeights;
-
-      // Save the GroupQuestion for the first time. This makes it a managed entity and assigns an ID.
-      let savedGroupQuestion = await entityManager.save(GroupQuestion, group_question);
-
-      // Handle parent relationship and version change tracking AFTER initial save
+      // step 3, but isolated and to be checked later
       if (createGroupQuestionDto.parentId) {
-        const parent = await entityManager.findOne(GroupQuestion, {
-          where: { id: createGroupQuestionDto.parentId },
-          relations: ['question', 'question.question_lookup', 'question.question_answer_option', 'question.question_answer_option.answer_option_lookup'],
-        });
-
-        if (!parent) {
-          throw new HttpException('Parent group question not found.', HttpStatus.NOT_FOUND);
-        }
-        // Link the saved GroupQuestion to its parent.
-        savedGroupQuestion.parent = parent; // Assign parent to the already saved entity instance.
-
-        // Declare year and month for versionChangesDetail
-        const currentDate = new Date();
-        const month = currentDate.toLocaleString('en-US', { month: 'short' });
-        const year = currentDate.getFullYear().toString();
-
-        const changes: {
-          added: { content: string; weight: number }[];
-          removed: { content: string }[];
-          modified: {
-            content: string;
-            changes: {
-              questionWeight?: { from: number; to: number };
-              answerOptions?: {
-                added: { content: string; weight: number }[];
-                removed: { content: string; weight: number }[];
-                modified: { content: string; weight: { from: number; to: number } }[];
-              };
-            };
-          }[];
-        } = {
-          added: [],
-          removed: [],
-          modified: []
-        };
-
-        const parentQuestions = parent.question || [];
-        const currentQuestions = createGroupQuestionDto.questions || [];
-        const parentQuestionMap = new Map(parentQuestions.map(q => [q.question_lookup.content, q]));
-
-        const currentQuestionMap = new Map(currentQuestions.map(q => [q.content, q]));
-        // Check for removed questions
-        for (const parentQ of parentQuestions) {
-          if (!currentQuestionMap.has(parentQ.question_lookup.content)) {
-            changes.removed.push({ content: parentQ.question_lookup.content });
-          }
-        }
-
-        // Check for new and modified questions
-        for (const currentQ of currentQuestions) {
-          let parentQ: typeof parentQuestions[number] | undefined = undefined;
-          parentQ = parentQuestionMap.get(currentQ.content);
-
-          if (!parentQ) {
-            // New question
-            if (typeof currentQ.content === 'string') {
-              changes.added.push({ content: currentQ.content ?? '', weight: currentQ.weight ?? 0 });
-            }
-          } else {
-            // Check for modifications
-            const modifiedQuestion = {
-              content: currentQ.content ?? '',
-              changes: {}
-            };
-            let isModified = false;
-            const answerOpChanges: {
-              added: { content: string; weight: number }[];
-              removed: { content: string; weight: number }[];
-              modified: { content: string; weight: { from: number; to: number } }[];
-            } = { added: [], removed: [], modified: [] };
-
-            // Compare question weights
-            if (currentQ.weight !== parentQ.weight) {
-              modifiedQuestion.changes['questionWeight'] = {
-                from: parentQ.weight,
-                to: currentQ.weight
-              };
-              isModified = true;
-            }
-
-            const parentAnswerOpsMap = new Map((parentQ.question_answer_option || []).map(qao => [qao.answer_option_lookup.content, qao]));
-            const currentAnswerOpsMap = new Map((currentQ.question_answer_option || []).map(qao => [qao.content, qao])); // Corrected content access
-
-            // Check for added answer options
-            for (const [content, currentQao] of currentAnswerOpsMap) {
-              if (typeof content === 'string' && !parentAnswerOpsMap.has(content)) {
-                answerOpChanges.added.push({ content: content ?? '', weight: currentQao.weight ?? 0 });
-                isModified = true;
-              }
-            }
-            // Check for removed answer options
-            for (const [content, parentQao] of parentAnswerOpsMap) {
-              if (!currentAnswerOpsMap.has(content)) {
-                answerOpChanges.removed.push({ content, weight: parentQao.weight });
-                isModified = true;
-              }
-            }
-            // Check for modified answer options
-            for (const [content, currentQao] of currentAnswerOpsMap) {
-              if (typeof content === 'string') {
-                const parentQao = parentAnswerOpsMap.get(content);
-                if (parentQao && currentQao.weight !== parentQao.weight) {
-                  answerOpChanges.modified.push({
-                    content,
-                    weight: { from: parentQao.weight ?? 0, to: currentQao.weight ?? 0 }
-                  });
-                  isModified = true;
-                }
-              }
-            }
-            if (isModified) {
-              modifiedQuestion.changes['answerOptions'] = answerOpChanges;
-              changes.modified.push(modifiedQuestion);
-            }
-          }
-        }
-
-        const versionChangesDetail = entityManager.create(VersionChangesDetail, {
-          group_question: savedGroupQuestion, // Reference the already saved entity
-          year: year,
-          month: month,
-          changed_question_detail: changes,
-        });
-
-        await entityManager.save(versionChangesDetail);
-
-        // Explicitly save `savedGroupQuestion` again to persist the parent link and version update.
-        await entityManager.save(GroupQuestion, savedGroupQuestion);
+        await this.handleParentAndVersionChanges(entityManager, savedGroupQuestion, createGroupQuestionDto);
       } else {
-        savedGroupQuestion.parent = null; // Clear parent if no parentId, on the saved entity
+        savedGroupQuestion.parent = null;
       }
 
-      // Process and save nested Questions and Answer Options.
-      for (const queData of createGroupQuestionDto.questions) {
-        let questionLookup = await entityManager.findOne(QuestionLookup, { where: { content: queData.content } });
+      // Step 4: Process and save all nested questions and answer options
+      await this.processNestedQuestions(entityManager, savedGroupQuestion, createGroupQuestionDto.questions);
 
-        if (!questionLookup) {
-          questionLookup = entityManager.create(QuestionLookup, { content: queData.content, created_by: createdByUserId, is_deleted: false });
-          await entityManager.save(QuestionLookup, questionLookup);
-        }
-        const catagoryEntity = await entityManager.findOne(Catagory, { where: { id: queData.catagoryId } });
-        if (!catagoryEntity) {
-          throw new HttpException('Catagory not found.', HttpStatus.NOT_FOUND);
-        }
-
-        const newQuestion = entityManager.create(Question, {
-          content: queData.content,
-          catagory: catagoryEntity,
-          group_question: savedGroupQuestion, // Link to the already saved parent GroupQuestion
-          question_lookup: questionLookup,
-          is_deleted: false,
-          created_by: createdByUserId,
-          weight: queData.weight,
-        });
-
-        // here answer option is not created
-        await entityManager.save(Question, newQuestion);
-        const createdQAO: QuestionAnswerOp[] = []
-        for (const ansData of queData.question_answer_option) {
-          // Correctly access content from nested DTO
-
-          let answerOption = await entityManager.findOne(AnswerOptionLookup, { where: { content: ansData.content } });
-          if (!answerOption) {
-            answerOption = entityManager.create(AnswerOptionLookup, { content: ansData.content, created_by: createdByUserId, is_deleted: false });
-            await entityManager.save(AnswerOptionLookup, answerOption);
-          }
-
-          const qao = entityManager.create(QuestionAnswerOp, {
-            question: newQuestion,
-            answer_option_lookup: answerOption,
-            weight: ansData.weight,
-            is_deleted: false,
-            created_by: createdByUserId,
-          });
-          createdQAO.push(qao)
-          await entityManager.save(QuestionAnswerOp, qao);
-        }
-        newQuestion.question_answer_option = createdQAO
-        await entityManager.save(Question, newQuestion);
-        if (!savedGroupQuestion.question) {
-          savedGroupQuestion.question = [];
-        }
-        savedGroupQuestion.question.push(newQuestion);
-        await entityManager.save(GroupQuestion, savedGroupQuestion)
-      }
       await queryRunner.commitTransaction();
+
       const responseData = {
         ...savedGroupQuestion,
         parent: savedGroupQuestion.parent ? savedGroupQuestion.parent.id : null,
@@ -471,6 +573,7 @@ export class GroupQuestionService {
                 if (!dtoQ.updated_question_answer_option.some(dtoQao => dtoQao.content === content)) {
                   if (!existingQao.is_deleted) {
                     existingQao.is_deleted = true;
+                    existingQao.deleted_at = new Date()
                     existingQao.question = questionEntity
                     await entityManager.save(QuestionAnswerOp, existingQao);
                     qaosToSave.push(existingQao);
@@ -497,6 +600,7 @@ export class GroupQuestionService {
             for (const qao of existingQ.question_answer_option) {
               if (!qao.is_deleted) {
                 qao.is_deleted = true;
+                qao.deleted_at = new Date()
                 qao.question = existingQ
                 qaosToUpdate.push(qao);
               }
