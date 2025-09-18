@@ -1,4 +1,4 @@
-import { IsArray, IsUUID } from "class-validator";
+import { IsArray, IsUUID, ValidateNested } from "class-validator";
 import { CreateQuestionEvaluation } from "../question-evaluation-dto/create-question-evaluation.dto";
 import { Type } from "class-transformer";
 
@@ -7,6 +7,7 @@ export class CreateAudioEvaluation {
     audio_id: string
 
     @IsArray()
+    @ValidateNested({ each: true })
     @Type(() => CreateQuestionEvaluation)
     questions: CreateQuestionEvaluation[];
 }

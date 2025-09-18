@@ -36,7 +36,7 @@ export class GroupQuestionService {
     const currentDate = new Date();
     const month = currentDate.toLocaleString('en-US', { month: 'short' });
     const year = currentDate.getFullYear().toString();
-    const groupQuestionName = `${month}/${year}/EP`;
+    const groupQuestionName = `oct/${year}/EP`;
 
     const doesOtherExistWithnThisMonth = await entityManager.findOne(GroupQuestion, {
       where: { name: groupQuestionName, is_deleted: false },
@@ -169,7 +169,8 @@ export class GroupQuestionService {
       isModified = true;
     }
 
-    const answerOpChanges = this.compareAnswerOptions(parentQ.question_answer_option, currentQ.updated_question_answer_option);
+    const answerOptions = currentQ.question_answer_option || currentQ.updated_question_answer_option;
+    const answerOpChanges = this.compareAnswerOptions(parentQ.question_answer_option, answerOptions);
 
     if (answerOpChanges.added.length > 0 || answerOpChanges.removed.length > 0 || answerOpChanges.modified.length > 0) {
       modifiedQuestion.changes.answerOptions = answerOpChanges;

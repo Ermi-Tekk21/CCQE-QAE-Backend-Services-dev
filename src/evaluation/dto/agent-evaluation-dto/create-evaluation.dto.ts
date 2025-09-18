@@ -1,5 +1,5 @@
 import { Type } from "class-transformer";
-import { IsArray, IsString } from "class-validator";
+import { IsArray, IsString, ValidateNested } from "class-validator";
 import { CreateAudioEvaluation } from "../audio-evaluation-dto/create-audio-evaluation.dto";
 
 export class CreateEvaluationDto {
@@ -7,6 +7,7 @@ export class CreateEvaluationDto {
     agent_assignment_id: string
 
     @IsArray()
+    @ValidateNested({ each: true })
     @Type(() => CreateAudioEvaluation)
     audios: CreateAudioEvaluation[];
 }

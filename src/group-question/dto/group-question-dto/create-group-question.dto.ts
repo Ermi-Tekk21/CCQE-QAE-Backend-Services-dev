@@ -1,4 +1,4 @@
-import { IsDate, IsOptional, IsUUID, MinDate, IsArray} from 'class-validator';
+import { IsDate, IsOptional, IsUUID, MinDate, IsArray, ValidateNested} from 'class-validator';
 import { Type } from 'class-transformer';
 import { CreateQuestionDto } from 'src/group-question/dto/question-dto/create-question.dto';
 
@@ -18,6 +18,7 @@ export class CreateGroupQuestionDto {
     created_by: string;
 
     @IsArray()
+    @ValidateNested({ each: true })
     @Type(() => CreateQuestionDto)
     questions: CreateQuestionDto[];
 }
