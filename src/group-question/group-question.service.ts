@@ -459,6 +459,10 @@ export class GroupQuestionService {
       } else {
         // Create a new question
         questionEntity = await this.createNewQuestion(entityManager, groupQuestion, dtoQ, updatedByUserId);
+        if (!groupQuestion.question) {
+          groupQuestion.question = [];
+        }
+        groupQuestion.question.push(questionEntity);
       }
 
       // Process answer options for the current question
@@ -468,10 +472,13 @@ export class GroupQuestionService {
     }
 
     // Second pass: delete questions that were removed from the DTO
-    for (const existingQ of existingQuestionsMap.values()) {
-      if (!existingQ.is_deleted) {
-        await entityManager.delete(Question, { id: existingQ.id });
-      }
+    const questionsToDelete = Array.from(existingQuestionsMap.values());
+    if (questionsToDelete.length > 0) {
+      await entityManager.remove(questionsToDelete);
+      // Update the in-memory array to reflect the deletion
+      groupQuestion.question = groupQuestion.question.filter(
+        q => !questionsToDelete.some(deletedQ => deletedQ.id === q.id)
+      );
     }
 
     // Save all changes at once for efficiency (if applicable)
@@ -534,14 +541,19 @@ export class GroupQuestionService {
       questionLookup = entityManager.create(QuestionLookup, { content: dtoQ.content, created_by: updatedByUserId, is_deleted: false });
       await entityManager.save(QuestionLookup, questionLookup);
     }
-
+    const catagory = await entityManager.findOne(Catagory, { where: { id: dtoQ.catagoryId } })
+    if (!catagory) {
+      throw new NotFoundException(`catagory ${dtoQ.catagoryId} not found`)
+    }
     const newQuestion = entityManager.create(Question, {
       ...questionData,
+      catagory: catagory,
       group_question: groupQuestion,
       question_lookup: questionLookup,
       created_by: updatedByUserId || groupQuestion.created_by,
       is_deleted: false,
     });
+
     await entityManager.save(Question, newQuestion);
     return newQuestion;
   }
@@ -589,11 +601,13 @@ export class GroupQuestionService {
       }
     }
 
-    // Soft-delete QAOs that were removed from the DTO
-    for (const [, existingQao] of existingQaoMap.entries()) {
-      if (!existingQao.is_deleted) {
-        await entityManager.delete(QuestionAnswerOp, { id: existingQao.id })
-      }
+    const answerOpstoDel = Array.from(existingQaoMap.values());
+    if (answerOpstoDel.length > 0) {
+      await entityManager.remove(answerOpstoDel);
+      // Update the in-memory array to reflect the deletion
+      questionEntity.question_answer_option = questionEntity.question_answer_option.filter(
+        qao => !answerOpstoDel.some(deletedQAO => deletedQAO.id === qao.id)
+      );
     }
 
     return qaosToSave;
@@ -625,7 +639,7 @@ export class GroupQuestionService {
       groupQuestion.updated_at = new Date();
       groupQuestion.updated_by = updateGroupQuestionDto.updated_by;
 
-      // Process all nested questions (creation, update, and soft-delete)
+      // Process all nested questions (creation, update, and delete)
       await this.processUpdatedQuestions(entityManager, groupQuestion, updateGroupQuestionDto.updated_questions, updateGroupQuestionDto.updated_by);
 
       // Recalculate and update the total weight
