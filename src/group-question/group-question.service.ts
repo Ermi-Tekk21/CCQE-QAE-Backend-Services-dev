@@ -10,6 +10,7 @@ import { GroupQuestion } from './entities/group-question-entities/group-question
 import { VersionChangesDetail } from './entities/version-changes-detail.entity';
 import { UpdateGroupQuestionDto } from './dto/group-question-dto/update-group-question.dto';
 import { CreateGroupQuestionDto } from './dto/group-question-dto/create-group-question.dto';
+import { DeletQueOrAnsOpDto } from './dto/group-question-dto/delet-queOrAnsOp.dto';
 
 @Injectable()
 export class GroupQuestionService {
@@ -591,7 +592,7 @@ export class GroupQuestionService {
     // Soft-delete QAOs that were removed from the DTO
     for (const [, existingQao] of existingQaoMap.entries()) {
       if (!existingQao.is_deleted) {
-        await entityManager.delete(QuestionAnswerOp, existingQao)
+        await entityManager.delete(QuestionAnswerOp, { id: existingQao.id })
       }
     }
 
@@ -894,6 +895,79 @@ export class GroupQuestionService {
       }
     } finally {
       await queryRunner.release();
+    }
+  }
+
+  async deleteQueOrAnsOPs(id: string, deletQueOrAnsOpDto: DeletQueOrAnsOpDto) {
+
+    const createupdateDto: UpdateGroupQuestionDto = {
+      updated_by: '',
+      updated_questions: []
+    };
+
+    // 
+    try {
+      const { ['group question']: groupQuestion } = await this.findOne(id)
+      createupdateDto.evaluation_ends_at = groupQuestion.evaluation_ends_at;
+      createupdateDto.updated_by = deletQueOrAnsOpDto.deletedBy;
+      createupdateDto.parentId = groupQuestion.parent
+
+      const taregtQuestion = groupQuestion.question.some(q => q.id === deletQueOrAnsOpDto.questionId);
+      if (!taregtQuestion) {
+        throw new NotFoundException(`question with id ${deletQueOrAnsOpDto.questionId} not found under group question with id ${id}`)
+      }
+
+      groupQuestion.question.forEach((queData, i) => {
+        createupdateDto.updated_questions[i] = {
+          id: queData.id,
+          content: queData.question_lookup.content,
+          weight: queData.weight,
+          catagoryId: queData.catagory.id,
+          updated_question_answer_option: queData.question_answer_option
+            ? queData.question_answer_option.map(ansOp => ({
+              id: ansOp.id,
+              content: ansOp.answer_option_lookup?.content,
+              weight: ansOp.weight
+            }))
+            : []
+        }
+      });
+
+      const targetQuestion = createupdateDto.updated_questions.find(
+        updatedQuestion => updatedQuestion.id === deletQueOrAnsOpDto.questionId
+      );
+      // the user wantes to delete answer option under specified question
+      if (deletQueOrAnsOpDto.AnswerOptions.length > 0) {
+        for (const ansOpId of deletQueOrAnsOpDto.AnswerOptions) {
+          const isTrue = createupdateDto.updated_questions.find(updatedQuestion =>
+            updatedQuestion.id === deletQueOrAnsOpDto.questionId)?.updated_question_answer_option.some(qao =>
+              qao.id === ansOpId
+            )
+          if (!isTrue) {
+            throw new NotFoundException(`answer option ${ansOpId} is not found under question ${deletQueOrAnsOpDto.questionId}`)
+          }
+
+          if (targetQuestion) {
+            targetQuestion.updated_question_answer_option = targetQuestion.updated_question_answer_option.filter(
+              qao => qao.id !== ansOpId
+            );
+          }
+        }
+      }
+      else {
+        createupdateDto.updated_questions = createupdateDto.updated_questions.filter(
+          updatedQuestion => updatedQuestion.id !== deletQueOrAnsOpDto.questionId
+        );
+      }
+
+      await this.update(id, createupdateDto)
+
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof HttpException) {
+        throw error;
+      }
+      console.error(error);
+      throw new InternalServerErrorException("Error occurred during deleting question");
     }
   }
 }
