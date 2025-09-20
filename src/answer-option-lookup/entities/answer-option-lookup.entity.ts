@@ -1,7 +1,7 @@
 import { QuestionAnswerOp } from "src/group-question/entities/question-answer-option-entities/question_answerOP.entity";
 import { Column, CreateDateColumn, DeleteDateColumn, Entity, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 
-@Entity("answer_option_lookup")
+@Entity("answerOP_lookup")
 export class AnswerOptionLookup {
     @PrimaryGeneratedColumn("uuid")
     id: string
