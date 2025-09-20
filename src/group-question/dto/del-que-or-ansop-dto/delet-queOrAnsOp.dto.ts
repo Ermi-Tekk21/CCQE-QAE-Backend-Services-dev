@@ -1,6 +1,7 @@
 import { IsArray, IsOptional, IsUUID } from "class-validator";
 
 export class DeletQueOrAnsOpDto {
+    @IsOptional()
     @IsUUID()
     deletedBy: string
 

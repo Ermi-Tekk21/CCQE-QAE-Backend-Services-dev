@@ -10,7 +10,7 @@ import { GroupQuestion } from './entities/group-question-entities/group-question
 import { VersionChangesDetail } from './entities/version-changes-detail.entity';
 import { UpdateGroupQuestionDto } from './dto/group-question-dto/update-group-question.dto';
 import { CreateGroupQuestionDto } from './dto/group-question-dto/create-group-question.dto';
-import { DeletQueOrAnsOpDto } from './dto/group-question-dto/delet-queOrAnsOp.dto';
+import { DeletQueOrAnsOpDto } from './dto/del-que-or-ansop-dto/delet-queOrAnsOp.dto';
 
 @Injectable()
 export class GroupQuestionService {
@@ -974,8 +974,12 @@ export class GroupQuestionService {
         );
       }
 
-      await this.update(id, createupdateDto)
-
+      const { ['updated group question']: updatedGroupQuestion } = await this.update(id, createupdateDto)
+      return {
+        success: true,
+        message: `Group question with ID "${id}" updated successfully.`,
+        "updated group question": updatedGroupQuestion,
+      };
     } catch (error) {
       if (error instanceof NotFoundException || error instanceof HttpException) {
         throw error;
