@@ -10,6 +10,7 @@ import { AnswerOptionLookupModule } from './answer-option-lookup/answer-option-l
 import { QuestionLookupModule } from './question-lookup/question-lookup.module';
 import { GroupQuestionModule } from './group-question/group-question.module';
 import { VersionChangesDetail } from './group-question/entities/version-changes-detail.entity';
+import { AppealModule } from './appeal/appeal.module';
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true }),
@@ -19,7 +20,8 @@ import { VersionChangesDetail } from './group-question/entities/version-changes-
     AnswerOptionLookupModule,
     QuestionLookupModule,
     GroupQuestionModule,
-    VersionChangesDetail
+    VersionChangesDetail,
+    AppealModule
   ],
   controllers: [AppController],
   providers: [AppService],
