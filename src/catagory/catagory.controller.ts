@@ -22,6 +22,11 @@ export class CatagoryController {
     return this.catagoryService.findOne(id);
   }
 
+  @Get('questions/:id')
+  fetchQuesUnderCatagory(@Param('id') id: string) {
+    return this.catagoryService.getAllQuesPerCatagory(id)
+  }
+
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateCatagoryDto: UpdateCatagoryDto) {
     return this.catagoryService.update(id, updateCatagoryDto);
@@ -38,7 +43,7 @@ export class CatagoryController {
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {    
+  remove(@Param('id') id: string) {
     return this.catagoryService.remove(id);
   }
 }
