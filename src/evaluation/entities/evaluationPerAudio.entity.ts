@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm";
+import { Column, CreateDateColumn, DeleteDateColumn, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { AgentEvaluation } from "./evaluation.entity";
 import { EvalPerQuestion } from "./evaluationPerQuestion.entity";
 
@@ -10,28 +10,38 @@ export class EvalPerAudio {
     @Column({ type: "uuid" })
     audio_id: string
 
-    @Column({ type: "float" })
+    @Column({ type: "float", nullable: true })
     result: number
 
-    @Column({default: false})
+    @Column({ default: false })
     is_deleted: boolean
 
-    @Column({ type: "uuid" })
+    @Column({ type: "uuid", nullable: true })
     created_by: string
+
+    @Column({ type: "uuid", nullable: true })
+    updated_by: string
 
     @Column({ type: "uuid", nullable: true })
     deleted_by: string;
 
-    @CreateDateColumn()
+    @CreateDateColumn({ type: "timestamp" })
     created_at: Date
 
-    @Column({ type: "timestamp", nullable: true })
+    @UpdateDateColumn({ type: "timestamp", nullable: true, default: null })
+    updated_at: Date | null;
+
+    @DeleteDateColumn({ type: "timestamp", nullable: true, default: null })
     deleted_at: Date;
 
     // relationship
-    @ManyToOne(() => AgentEvaluation, (agent_eval) => agent_eval.eval_per_audio)
+    @ManyToOne(() => AgentEvaluation, (agent_eval) => agent_eval.eval_per_audio, {
+        onDelete: 'CASCADE'
+    })
     agent_evaluation: AgentEvaluation
 
-    @OneToMany(() => EvalPerQuestion, (eval_per_question) => eval_per_question.eval_per_audio)
+    @OneToMany(() => EvalPerQuestion, (eval_per_question) => eval_per_question.eval_per_audio, {
+        cascade: true
+    })
     eval_per_question: EvalPerQuestion[]
 }

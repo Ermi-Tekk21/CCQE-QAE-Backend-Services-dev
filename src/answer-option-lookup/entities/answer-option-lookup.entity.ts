@@ -1,7 +1,7 @@
 import { QuestionAnswerOp } from "src/group-question/entities/question-answer-option-entities/question_answerOP.entity";
-import { Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn } from "typeorm";
+import { Column, CreateDateColumn, DeleteDateColumn, Entity, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 
-@Entity("answer_option_lookup")
+@Entity("answerOP_lookup")
 export class AnswerOptionLookup {
     @PrimaryGeneratedColumn("uuid")
     id: string
@@ -9,28 +9,28 @@ export class AnswerOptionLookup {
     @Column({ type: "text" })
     content: string
 
-    @Column({default: false})
+    @Column({ default: false })
     is_deleted: boolean
 
     @Column({ type: "uuid", nullable: true })
     created_by: string
 
     @Column({ type: "uuid", nullable: true })
-    updated_by: string;
+    updated_by: string
 
     @Column({ type: "uuid", nullable: true })
     deleted_by: string;
 
-    @CreateDateColumn()
+    @CreateDateColumn({ type: "timestamp" })
     created_at: Date
 
-    @Column({ type: "timestamp", nullable: true, default: null })
-    updated_at: Date
+    @UpdateDateColumn({ type: "timestamp", nullable: true, default: null })
+    updated_at: Date | null;
 
-    @Column({ type: "timestamp", nullable: true })
+    @DeleteDateColumn({ type: "timestamp", nullable: true, default: null })
     deleted_at: Date | null;
 
     // relationship
-    @OneToMany(()=> QuestionAnswerOp, (question_answerOP) => question_answerOP.answer_option_lookup)
+    @OneToMany(() => QuestionAnswerOp, (question_answerOP) => question_answerOP.answer_option_lookup)
     question_answer_option: QuestionAnswerOp[]
 }

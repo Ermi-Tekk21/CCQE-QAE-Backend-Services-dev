@@ -2,6 +2,7 @@ import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/commo
 import { GroupQuestionService } from './group-question.service';
 import { CreateGroupQuestionDto } from './dto/group-question-dto/create-group-question.dto';
 import { UpdateGroupQuestionDto } from './dto/group-question-dto/update-group-question.dto';
+import { DeletQueOrAnsOpDto } from './dto/del-que-or-ansop-dto/delet-queOrAnsOp.dto';
 
 @Controller('group-question')
 export class GroupQuestionController {
@@ -50,5 +51,10 @@ export class GroupQuestionController {
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.groupQuestionService.remove(id);
+  }
+
+  @Delete(':id/delete-question-or-ansOptions')
+  removeQuesOrAnsOp(@Param('id') id: string, @Body() deletQueOrAnsOpDto:DeletQueOrAnsOpDto) {
+    return this.groupQuestionService.deleteQueOrAnsOPs(id, deletQueOrAnsOpDto)
   }
 }

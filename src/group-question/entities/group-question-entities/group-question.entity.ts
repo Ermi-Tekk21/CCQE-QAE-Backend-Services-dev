@@ -1,5 +1,5 @@
 import { groupQuestionStatus } from "src/common/group_question.status";
-import { Column, CreateDateColumn, DeleteDateColumn, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm"
+import { Column, CreateDateColumn, DeleteDateColumn, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm"
 import { Question } from "src/group-question/entities/question-entities/question.entity";
 import { AgentEvaluation } from "src/evaluation/entities/evaluation.entity";
 import { VersionChangesDetail } from "../version-changes-detail.entity";
@@ -26,30 +26,30 @@ export class GroupQuestion {
     status: groupQuestionStatus
 
     @Column({ default: false })
-    is_deleted: boolean
-
-    @Column({default: false})
     is_active: boolean
 
-    @Column({ type: "timestamp", nullable: true})
+    @Column({ type: "timestamp", nullable: true })
     evaluation_ends_at: Date
 
-    @Column({ type: "uuid", nullable: true})
+    @Column({ default: false })
+    is_deleted: boolean
+
+    @Column({ type: "uuid", nullable: true })
     created_by: string
 
     @Column({ type: "uuid", nullable: true })
-    updated_by: string | null
+    updated_by: string
 
     @Column({ type: "uuid", nullable: true })
     deleted_by: string;
 
-    @CreateDateColumn()
+    @CreateDateColumn({ type: "timestamp" })
     created_at: Date
 
-    @Column({ type: "timestamp", nullable: true })
-    updated_at: Date | null
+    @UpdateDateColumn({ type: "timestamp", nullable: true, default: null })
+    updated_at: Date | null;
 
-    @DeleteDateColumn({ type: "timestamp", nullable: true})
+    @DeleteDateColumn({ type: "timestamp", nullable: true, default: null })
     deleted_at: Date | null;
 
     //relationship

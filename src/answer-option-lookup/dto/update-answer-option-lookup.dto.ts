@@ -1,4 +1,6 @@
-import { PartialType } from '@nestjs/mapped-types';
-import { CreateAnswerOptionLookupDto } from './create-answer-option-lookup.dto';
+import { IsString } from 'class-validator';
 
-export class UpdateAnswerOptionLookupDto extends PartialType(CreateAnswerOptionLookupDto) {}
+export class UpdateAnswerOptionLookupDto {
+    @IsString()
+    content: string;
+}

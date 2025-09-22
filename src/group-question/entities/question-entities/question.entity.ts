@@ -1,4 +1,4 @@
-import { Column, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm"
+import { Column, CreateDateColumn, DeleteDateColumn, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm"
 import { QuestionLookup } from "src/question-lookup/entities/question-lookup.entity"
 import { Catagory } from "src/catagory/entities/catagory.entity"
 import { GroupQuestion } from "../group-question-entities/group-question.entity"
@@ -17,8 +17,26 @@ export class Question {
     @Column({ default: false })
     is_deleted: boolean
 
+    @Column({ type: "uuid", nullable: true })
+    created_by: string
+
+    @Column({ type: "uuid", nullable: true })
+    updated_by: string
+
+    @Column({ type: "uuid", nullable: true })
+    deleted_by: string;
+
+    @CreateDateColumn({ type: "timestamp" })
+    created_at: Date
+
+    @UpdateDateColumn({ type: "timestamp", nullable: true, default: null })
+    updated_at: Date | null;
+
+    @DeleteDateColumn({ type: "timestamp", nullable: true, default: null })
+    deleted_at: Date | null;
+
     //relationship
-    @Exclude() 
+    @Exclude()
     @ManyToOne(() => GroupQuestion, (group_question) => group_question.question, {
         onDelete: 'CASCADE'
     })
@@ -31,7 +49,7 @@ export class Question {
     catagory: Catagory
 
     @OneToMany(() => QuestionAnswerOp, (questionAnswerOp) => questionAnswerOp.question, {
-        cascade:true,
+        cascade: true,
     })
     question_answer_option: QuestionAnswerOp[]
 

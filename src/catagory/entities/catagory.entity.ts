@@ -1,5 +1,5 @@
 import { Question } from "src/group-question/entities/question-entities/question.entity";
-import { Column, CreateDateColumn, DeleteDateColumn, Entity, OneToMany, PrimaryGeneratedColumn } from "typeorm";
+import { Column, CreateDateColumn, DeleteDateColumn, Entity, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 
 @Entity("catagory")
 export class Catagory {
@@ -16,18 +16,18 @@ export class Catagory {
     created_by: string
 
     @Column({ type: "uuid", nullable: true })
-    updated_by: string;
+    updated_by: string
 
     @Column({ type: "uuid", nullable: true })
     deleted_by: string;
 
-    @CreateDateColumn()
+    @CreateDateColumn({ type: "timestamp" })
     created_at: Date
 
-    @Column({ type: "timestamp", nullable: true, default: null })
-    updated_at: Date
+    @UpdateDateColumn({ type: "timestamp", nullable: true, default: null })
+    updated_at: Date | null;
 
-    @DeleteDateColumn({ type: "timestamp", nullable: true })
+    @DeleteDateColumn({ type: "timestamp", nullable: true, default: null })
     deleted_at: Date | null;
 
     //relationship
