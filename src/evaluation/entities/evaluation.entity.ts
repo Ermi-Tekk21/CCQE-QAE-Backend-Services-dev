@@ -8,7 +8,7 @@ export class AgentEvaluation {
     @PrimaryGeneratedColumn("uuid")
     id: string
 
-    @Column({ type: "uuid" })
+    @Column({ type: "uuid" , unique: true})
     agent_assignment_id: string
 
     @Column({ type: "float", nullable: true })
