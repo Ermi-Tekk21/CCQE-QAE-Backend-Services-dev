@@ -73,7 +73,7 @@ export class EvaluationService {
           } else if (foundQuestionAnswerOption.question.id != foundQuestion.id) {
             throw new BadRequestException(`answer option with id ${foundQuestionAnswerOption.id} is not under question with id ${foundQuestion.id}`)
           }
-          createdQuestionEvaluation.question_answerOP = foundQuestionAnswerOption
+          createdQuestionEvaluation.question_answerOp = foundQuestionAnswerOption
           audioResult += foundQuestionAnswerOption.weight
           createdQuestionEvaluation.updated_at = null
           await entityManager.save(EvalPerQuestion, createdQuestionEvaluation)
@@ -193,7 +193,7 @@ export class EvaluationService {
           } else if (questionAnswerOP.question.id != evalPerQue.question.id) {
             throw new BadRequestException('answer option and question is mismatched, allignment issue occured.')
           }
-          evalPerQue.question_answerOP = questionAnswerOP
+          evalPerQue.question_answerOp = questionAnswerOP
           newAudioResult += questionAnswerOP.weight
           await entityManager.save(EvalPerQuestion, evalPerQue)
         }

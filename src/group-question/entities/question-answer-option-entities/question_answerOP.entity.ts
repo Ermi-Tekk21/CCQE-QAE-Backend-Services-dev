@@ -43,6 +43,6 @@ export class QuestionAnswerOp {
     @ManyToOne(() => AnswerOptionLookup, (answer_option) => answer_option.question_answer_option)
     answer_option_lookup: AnswerOptionLookup
 
-    @OneToMany(() => EvalPerQuestion, (eval_per_question) => eval_per_question.question_answerOP)
+    @OneToMany(() => EvalPerQuestion, (eval_per_question) => eval_per_question.question_answerOp)
     eval_per_question: EvalPerQuestion[]
 }

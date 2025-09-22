@@ -36,7 +36,7 @@ export class EvalPerQuestion {
     eval_per_audio: EvalPerAudio
 
     @ManyToOne(() => QuestionAnswerOp, (question_answerOp) => question_answerOp.eval_per_question)
-    question_answerOP: QuestionAnswerOp
+    question_answerOp: QuestionAnswerOp
 
     @ManyToOne(() => Question, (question) => question.eval_per_question)
     question: Question
