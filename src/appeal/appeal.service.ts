@@ -118,7 +118,7 @@ export class AppealService {
     }
   }
 
-
+  // agent id
   async update(id: string, updateAppealDto: UpdateAppealDto) {
     const queryRunner = this.datasource.createQueryRunner();
     await queryRunner.connect();
@@ -170,7 +170,7 @@ export class AppealService {
     }
   }
 
-  // specific audio appeal
+  // specific audio appeal id
   async remove(id: string) {
     try {
       const { appeal: appealToBeDeleted } = await this.findOne(id)
@@ -192,6 +192,7 @@ export class AppealService {
     }
   }
 
+  //agent id
   async removeAllApealsUnderAgent(id: string) {
     try {
       const { appeals } = await this.findAppealsPerAgentId(id)
