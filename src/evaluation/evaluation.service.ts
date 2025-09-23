@@ -201,7 +201,8 @@ export class EvaluationService {
         await entityManager.save(EvalPerAudio, evalPerAudio)
         newAgentResult += evalPerAudio.result
       }
-      agentEvaluation.result = newAgentResult
+      agentEvaluation.result = newAgentResult / updateEvaluationDto.audios.length
+
       await entityManager.save(AgentEvaluation, agentEvaluation)
       await entityManager.queryRunner?.commitTransaction()
       return {
