@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Put, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Put, Param, Delete, Patch } from '@nestjs/common';
 import { AppealService } from './appeal.service';
 import { CreateAppealDto } from './dto/create-appeal.dto';
 import { UpdateAppealDto } from './dto/update-appeal.dto';
@@ -40,5 +40,20 @@ export class AppealController {
   @Delete('agent/:id')
   removeAppealsPerAgent(@Param('id') id: string) {
     return this.appealService.removeAllApealsUnderAgent(id);
+  }
+
+  @Patch('under-review/:id')
+  underReview(@Param('id') id: string) {
+    return this.appealService.underReview(id)
+  }
+
+  @Patch('close/:id')
+  close(@Param('id') id: string) {
+    return this.appealService.close(id)
+  }
+
+  @Patch('draft/:id')
+  returnToDraft(@Param('id') id: string) {
+    return this.appealService.returnToDraft(id)
   }
 }

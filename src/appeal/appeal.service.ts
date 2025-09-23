@@ -5,6 +5,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Appeal } from './entities/appeal.entity';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import { EvalPerAudio } from 'src/evaluation/entities/evaluationPerAudio.entity';
+import { appealStatus } from 'src/common/appeal.status';
 
 @Injectable()
 export class AppealService {
@@ -211,6 +212,81 @@ export class AppealService {
         console.error(error);
         throw new InternalServerErrorException("error occured during deleting this appeal")
       }
+    }
+  }
+
+  //appeal id
+  async underReview(id: string) {
+    try {
+      const { appeal } = await this.findOne(id)
+      if (appeal.status !== appealStatus.DRAFT) {
+        throw new ConflictException('this specified appeal status should be draft to be changed to under review.')
+      }
+      appeal.status = appealStatus.UNDER_REVIEW
+      await this.appealRepo.save(appeal)
+      return {
+        success: true,
+        message: `appeal with id ${id} status is successfully changed to ${appeal.status}`,
+        appeal
+      }
+    } catch (error) {
+      if (error instanceof ConflictException || error instanceof NotFoundException) {
+        throw error
+      } else {
+        console.error(error);
+        throw new InternalServerErrorException("error occured during changing status to under review.")
+      }
+
+    }
+  }
+
+    //appeal id
+  async close(id: string) {
+    try {
+      const { appeal } = await this.findOne(id)
+      if (appeal.status !== appealStatus.UNDER_REVIEW) {
+        throw new ConflictException('this specified appeal status should be under review to be changed to comleted.')
+      }
+      appeal.status = appealStatus.COMPLETED
+      await this.appealRepo.save(appeal)
+      return {
+        success: true,
+        message: `appeal with id ${id} status is successfully changed to ${appeal.status}`,
+        appeal
+      }
+    } catch (error) {
+      if (error instanceof ConflictException || error instanceof NotFoundException) {
+        throw error
+      } else {
+        console.error(error);
+        throw new InternalServerErrorException("error occured during changing status to completed.")
+      }
+
+    }
+  }
+
+      //appeal id
+  async returnToDraft(id: string) {
+    try {
+      const { appeal } = await this.findOne(id)
+      if (appeal.status !== appealStatus.UNDER_REVIEW) {
+        throw new ConflictException('this specified appeal status should be under review to be changed to draft.')
+      }
+      appeal.status = appealStatus.DRAFT
+      await this.appealRepo.save(appeal)
+      return {
+        success: true,
+        message: `appeal with id ${id} status is successfully changed to ${appeal.status}`,
+        appeal
+      }
+    } catch (error) {
+      if (error instanceof ConflictException || error instanceof NotFoundException) {
+        throw error
+      } else {
+        console.error(error);
+        throw new InternalServerErrorException("error occured during changing status to draft.")
+      }
+
     }
   }
 }
