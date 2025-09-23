@@ -76,7 +76,7 @@ export class AppealService {
         }, relations: ['evaluation_per_audio', 'evaluation_per_audio.agent_evaluation']
       });
       if (!appeals || appeals.length == 0) {
-        throw new NotFoundException(`appeal with id ${id} not found.`)
+        throw new NotFoundException(`appeals from agent id ${id} not found.`)
       }
 
       return {
@@ -96,7 +96,10 @@ export class AppealService {
   // appealsId
   async findOne(id: string) {
     try {
-      const appeal = await this.appealRepo.findOne({ where: { id } });
+      const appeal = await this.appealRepo.findOne({
+        where: { id },
+        relations: ['evaluation_per_audio']
+      });
       if (!appeal) {
         throw new NotFoundException(`appeal with id ${id} not found.`)
       }
@@ -129,7 +132,7 @@ export class AppealService {
       })
 
       if (appeals.length == 0 || !appeals) {
-        throw new NotFoundException(`appeals with agent id `)
+        throw new NotFoundException(`appeals with agent id ${id} does not exist yet`)
       }
       const toBeAddedAudioEvalIds = updateAppealDto.audio_evaluation_ids.filter(audioEvalId =>
         !appeals.some(appeal => appeal.evaluation_per_audio?.id == audioEvalId)
