@@ -1,4 +1,7 @@
-import { PartialType } from '@nestjs/mapped-types';
-import { CreateAppealDto } from './create-appeal.dto';
+import { IsArray, IsUUID } from 'class-validator';
 
-export class UpdateAppealDto extends PartialType(CreateAppealDto) {}
+export class UpdateAppealDto {
+    @IsArray()
+    @IsUUID("all", { each: true })
+    audio_evaluation_ids: string[]
+}

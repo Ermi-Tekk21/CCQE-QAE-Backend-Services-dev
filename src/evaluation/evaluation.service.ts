@@ -83,7 +83,7 @@ export class EvaluationService {
         createdAudioEvaluation.updated_at = null
         await entityManager.save(EvalPerAudio, createdAudioEvaluation)
       }
-      createdAgentEvaluation.result = agentResult
+      createdAgentEvaluation.result = agentResult / audios.length
       createdAgentEvaluation.updated_at = null
       entityManager.save(AgentEvaluation, createdAgentEvaluation)
       await entityManager.queryRunner?.commitTransaction()
