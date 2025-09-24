@@ -26,7 +26,6 @@ export class AppealService {
     try {
       const newAppeals: Appeal[] = []
       for (const audioAppealId of createAppealDto.audio_evaluation_ids) {
-        console.log(audioAppealId);
 
         const audioEval = await this.evalPerAudioRepo.findOne({ where: { id: audioAppealId } });
         if (!audioEval) {

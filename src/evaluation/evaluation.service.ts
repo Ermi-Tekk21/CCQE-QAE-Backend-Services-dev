@@ -102,7 +102,7 @@ export class EvaluationService {
       createdAgentEvaluation.result = agentResult / audios.length
       createdAgentEvaluation.updated_at = null
       entityManager.save(AgentEvaluation, createdAgentEvaluation)
-      // await entityManager.queryRunner?.commitTransaction()
+      await entityManager.queryRunner?.commitTransaction()
 
       return {
         success: true,
@@ -384,7 +384,10 @@ export class EvaluationService {
       throw new NotFoundException('agent evaluation not found')
     }
     const appeals = evaluation.eval_per_audio.map(audioEval => audioEval.appeal);
-    if (appeals.some(appeal => appeal.status == appealStatus.UNDER_REVIEW)) {
+    if (appeals.length > 0 && appeals.some(appeal =>
+      (appeal && appeal.status == appealStatus.UNDER_REVIEW) ||
+      (appeal && appeal.status != appealStatus.DRAFT)
+    )) {
       evaluation.status = agentEvalStatus.UNDER_REVIEW
       await this.agentEvaluationRepo.save(evaluation)
     } else {
