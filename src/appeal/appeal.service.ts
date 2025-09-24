@@ -6,6 +6,8 @@ import { Appeal } from './entities/appeal.entity';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import { EvalPerAudio } from 'src/evaluation/entities/evaluationPerAudio.entity';
 import { appealStatus } from 'src/common/appeal.status';
+import { agentEvalStatus } from 'src/common/agent_evaluation.status';
+import { EvaluationService } from 'src/evaluation/evaluation.service';
 
 @Injectable()
 export class AppealService {
@@ -16,6 +18,7 @@ export class AppealService {
     @InjectRepository(EvalPerAudio)
     private readonly evalPerAudioRepo: Repository<EvalPerAudio>,
 
+    private readonly evaluationService: EvaluationService,
     private readonly datasource: DataSource,
   ) { }
 
@@ -99,7 +102,7 @@ export class AppealService {
     try {
       const appeal = await this.appealRepo.findOne({
         where: { id },
-        relations: ['evaluation_per_audio']
+        relations: ['evaluation_per_audio', 'evaluation_per_audio.agent_evaluation']
       });
       if (!appeal) {
         throw new NotFoundException(`appeal with id ${id} not found.`)
@@ -223,7 +226,9 @@ export class AppealService {
         throw new ConflictException('this specified appeal status should be draft to be changed to under review.')
       }
       appeal.status = appealStatus.UNDER_REVIEW
+      appeal.evaluation_per_audio.agent_evaluation.status = agentEvalStatus.UNDER_REVIEW
       await this.appealRepo.save(appeal)
+      await this.evaluationService.updateEvalStatus(appeal.evaluation_per_audio.agent_evaluation.id)
       return {
         success: true,
         message: `appeal with id ${id} status is successfully changed to ${appeal.status}`,
@@ -240,7 +245,7 @@ export class AppealService {
     }
   }
 
-    //appeal id
+  //appeal id
   async close(id: string) {
     try {
       const { appeal } = await this.findOne(id)
@@ -249,6 +254,7 @@ export class AppealService {
       }
       appeal.status = appealStatus.COMPLETED
       await this.appealRepo.save(appeal)
+      await this.evaluationService.updateEvalStatus(appeal.evaluation_per_audio.agent_evaluation.id)
       return {
         success: true,
         message: `appeal with id ${id} status is successfully changed to ${appeal.status}`,
@@ -265,15 +271,17 @@ export class AppealService {
     }
   }
 
-      //appeal id
+  //appeal id
   async returnToDraft(id: string) {
     try {
       const { appeal } = await this.findOne(id)
-      if (appeal.status !== appealStatus.UNDER_REVIEW) {
-        throw new ConflictException('this specified appeal status should be under review to be changed to draft.')
-      }
+
       appeal.status = appealStatus.DRAFT
       await this.appealRepo.save(appeal)
+
+      const agentEvaluationId = appeal.evaluation_per_audio.agent_evaluation.id
+      await this.evaluationService.updateEvalStatus(agentEvaluationId)
+
       return {
         success: true,
         message: `appeal with id ${id} status is successfully changed to ${appeal.status}`,
@@ -286,7 +294,25 @@ export class AppealService {
         console.error(error);
         throw new InternalServerErrorException("error occured during changing status to draft.")
       }
+    }
+  }
 
+  async decline(id: string) {
+    try {
+      const { appeal } = await this.findOne(id)
+      appeal.status = appealStatus.COMPLETED
+      await this.appealRepo.save(appeal)
+      return {
+        success: true,
+        message: "status successfully changed to completed with declining the appeal"
+      }
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error
+      } else {
+        console.error(error);
+        throw new InternalServerErrorException('something bad happened during declining this appeal.')
+      }
     }
   }
 }

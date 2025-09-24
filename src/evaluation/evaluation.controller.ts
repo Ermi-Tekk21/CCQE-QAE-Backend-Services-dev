@@ -37,8 +37,8 @@ export class EvaluationController {
     return this.evaluationService.softDelete(id);
   }
 
-  @Patch('restore-soft-delete/:id')
-  restoreSoftDelete(@Param('id') id: string) {
-    return this.evaluationService.restoreSoftDelete(id);
+  @Patch('close/:id')
+  agentUnderReview(@Param('id') id: string) {
+    return this.evaluationService.close(id);
   }
 }

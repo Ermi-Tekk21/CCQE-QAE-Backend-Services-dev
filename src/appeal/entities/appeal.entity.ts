@@ -14,6 +14,9 @@ export class Appeal {
     })
     status: appealStatus
 
+    @Column({default: false})
+    is_declined: boolean
+
     @Column({ type: "uuid" })
     agent_id: string
 

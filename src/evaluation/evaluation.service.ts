@@ -9,6 +9,8 @@ import { EvalPerQuestion } from './entities/evaluationPerQuestion.entity';
 import { Question } from 'src/group-question/entities/question-entities/question.entity';
 import { QuestionAnswerOp } from 'src/group-question/entities/question-answer-option-entities/question_answerOP.entity';
 import { InjectRepository } from '@nestjs/typeorm';
+import { agentEvalStatus } from 'src/common/agent_evaluation.status';
+import { appealStatus } from 'src/common/appeal.status';
 
 @Injectable()
 export class EvaluationService {
@@ -16,6 +18,7 @@ export class EvaluationService {
   constructor(
     @InjectRepository(AgentEvaluation)
     private readonly agentEvaluationRepo: Repository<AgentEvaluation>,
+
     private readonly dataSource: DataSource,
   ) { }
 
@@ -318,6 +321,65 @@ export class EvaluationService {
       }
     } finally {
       await queryRunner.release();
+    }
+  }
+
+  //agent evaluation id
+  async close(id: string) {
+    try {
+      const evaluation = await this.agentEvaluationRepo.findOne({
+        where: { id },
+        relations: ['eval_per_audio', 'eval_per_audio.appeal']
+      })
+
+      if (!evaluation) {
+        throw new NotFoundException(`evaluation with id ${id} not found.`)
+      }
+
+      const audioEvaluations: EvalPerAudio[] = evaluation.eval_per_audio
+      for (const audioEvaluation of audioEvaluations) {
+        if (audioEvaluation.appeal.status == appealStatus.UNDER_REVIEW || audioEvaluation.appeal.status == appealStatus.DRAFT) {
+          throw new BadRequestException(`apeal up on audio with ${audioEvaluation.audio_id} should be closed before closing agent evaluation.`)
+        }
+      }
+      evaluation.status = agentEvalStatus.COMPLETED
+
+      await this.agentEvaluationRepo.save(evaluation)
+      return {
+        success: true,
+        message: `agent evaluation with agent evaluation id ${id} status is successfully changed to ${evaluation.status}`,
+        evaluation,
+      }
+    } catch (error) {
+      if (error instanceof BadRequestException || error instanceof NotFoundException) {
+        throw error
+      } else {
+        console.error(error);
+        throw new InternalServerErrorException("error occured during changing status to under review.")
+      }
+
+    }
+  }
+
+  //agent evaluation id
+  async updateEvalStatus(id: string) {
+    const evaluation = await this.agentEvaluationRepo.findOne({
+      where: { id },
+      relations: ['eval_per_audio', 'eval_per_audio.appeal']
+    })
+    if (!evaluation) {
+      throw new NotFoundException('agent evaluation not found')
+    }
+    const appeals = evaluation.eval_per_audio.map(audioEval => audioEval.appeal);
+    if (appeals.some(appeal => appeal.status == appealStatus.UNDER_REVIEW)) {
+      evaluation.status = agentEvalStatus.UNDER_REVIEW
+      await this.agentEvaluationRepo.save(evaluation)
+    } else {
+      evaluation.status = agentEvalStatus.DRAFT
+      await this.agentEvaluationRepo.save(evaluation)
+    }
+    return {
+      appeals
     }
   }
 }
