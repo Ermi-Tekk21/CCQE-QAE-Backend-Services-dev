@@ -31,6 +31,6 @@ export class AnswerOptionLookup {
     deleted_at: Date | null;
 
     // relationship
-    @OneToMany(() => QuestionAnswerOp, (question_answerOP) => question_answerOP.answer_option_lookup)
+    @OneToMany(() => QuestionAnswerOp, (question_answerOp) => question_answerOp.answer_option_lookup)
     question_answer_option: QuestionAnswerOp[]
 }

@@ -8,17 +8,20 @@ import { Catagory } from 'src/catagory/entities/catagory.entity';
 import { AnswerOptionLookup } from 'src/answer-option-lookup/entities/answer-option-lookup.entity';
 import { QuestionLookup } from 'src/question-lookup/entities/question-lookup.entity';
 import { QuestionAnswerOp } from 'src/group-question/entities/question-answer-option-entities/question_answerOP.entity';
+import { GroupQuestion } from './entities/group-question-entities/group-question.entity';
 
 @Module({
   imports: [TypeOrmModule.forFeature([
+    GroupQuestion,
     VersionChangesDetail,
     Question,
     Catagory,
     AnswerOptionLookup,
     QuestionLookup,
-    QuestionAnswerOp
+    QuestionAnswerOp,
   ])],
   controllers: [GroupQuestionController],
   providers: [GroupQuestionService],
+  exports: [GroupQuestionService]
 })
 export class GroupQuestionModule { }

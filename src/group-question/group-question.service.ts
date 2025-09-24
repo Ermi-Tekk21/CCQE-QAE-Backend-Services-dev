@@ -1,6 +1,6 @@
 import { BadRequestException, HttpException, HttpStatus, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { groupQuestionStatus } from 'src/common/group_question.status';
-import { DataSource, EntityManager } from 'typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 import { Question } from 'src/group-question/entities/question-entities/question.entity';
 import { QuestionAnswerOp } from 'src/group-question/entities/question-answer-option-entities/question_answerOP.entity';
 import { AnswerOptionLookup } from 'src/answer-option-lookup/entities/answer-option-lookup.entity';
@@ -11,10 +11,14 @@ import { VersionChangesDetail } from './entities/version-changes-detail.entity';
 import { UpdateGroupQuestionDto } from './dto/group-question-dto/update-group-question.dto';
 import { CreateGroupQuestionDto } from './dto/group-question-dto/create-group-question.dto';
 import { DeletQueOrAnsOpDto } from './dto/del-que-or-ansop-dto/delet-queOrAnsOp.dto';
+import { InjectRepository } from '@nestjs/typeorm';
 
 @Injectable()
 export class GroupQuestionService {
   constructor(
+    @InjectRepository(GroupQuestion)
+    private readonly groupQuestionRepo: Repository<GroupQuestion>,
+
     private readonly dataSource: DataSource,
   ) { }
 
@@ -986,6 +990,22 @@ export class GroupQuestionService {
       }
       console.error(error);
       throw new InternalServerErrorException("Error occurred during deleting question");
+    }
+  }
+
+  async getActiveGroupQuestion() {
+    const groupQuestion = await this.groupQuestionRepo.findOne({
+      where: {
+        is_active: true
+      },
+      relations: ['question', 'question.question_lookup', 'question.catagory', 'question.question_answer_option', 'question.question_answer_option.answer_option_lookup', 'parent'],
+    })
+
+    if (!groupQuestion) {
+      throw new NotFoundException("no active group question is found !")
+    }
+    return {
+      groupQuestion
     }
   }
 }
