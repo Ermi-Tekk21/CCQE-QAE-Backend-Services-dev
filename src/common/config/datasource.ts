@@ -6,10 +6,11 @@ import { EvalPerQuestion } from 'src/evaluation/entities/evaluationPerQuestion.e
 import { AnswerOptionLookup } from 'src/answer-option-lookup/entities/answer-option-lookup.entity';
 import { QuestionLookup } from 'src/question-lookup/entities/question-lookup.entity';
 import { Catagory } from 'src/catagory/entities/catagory.entity';
-import { GroupQuestion } from 'src/group-question/entities/group-question-entities/group-question.entity'; 
+import { GroupQuestion } from 'src/group-question/entities/group-question-entities/group-question.entity';
 import { QuestionAnswerOp } from 'src/group-question/entities/question-answer-option-entities/question_answerOP.entity';
 import { Question } from 'src/group-question/entities/question-entities/question.entity';
 import { VersionChangesDetail } from 'src/group-question/entities/version-changes-detail.entity';
+import { Appeal } from 'src/appeal/entities/appeal.entity';
 
 ConfigModule.forRoot({ isGlobal: true });
 
@@ -30,6 +31,7 @@ export const typeOrmConfig: TypeOrmModuleOptions = {
     GroupQuestion,
     QuestionAnswerOp,
     Question,
+    Appeal,
     VersionChangesDetail
   ],
   synchronize: true,

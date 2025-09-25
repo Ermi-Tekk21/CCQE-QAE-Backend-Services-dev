@@ -1,6 +1,7 @@
-import { Column, CreateDateColumn, DeleteDateColumn, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { Column, CreateDateColumn, DeleteDateColumn, Entity, ManyToOne, OneToMany, OneToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { AgentEvaluation } from "./evaluation.entity";
 import { EvalPerQuestion } from "./evaluationPerQuestion.entity";
+import { Appeal } from "src/appeal/entities/appeal.entity";
 
 @Entity("evaluation_per_audio")
 export class EvalPerAudio {
@@ -44,4 +45,7 @@ export class EvalPerAudio {
         cascade: true
     })
     eval_per_question: EvalPerQuestion[]
+
+    @OneToOne(() => Appeal, (appeal) => appeal.evaluation_per_audio)
+    appeal: Appeal
 }

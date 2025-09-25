@@ -23,6 +23,15 @@ export class GroupQuestionController {
     return this.groupQuestionService.findOne(id);
   }
 
+  @Get('fetch/active')
+  async getActiveGroupQuestion() {
+    const activeGroupQuestion = await this.groupQuestionService.getActiveGroupQuestion()
+    return {
+      success: true,
+      "active group question": activeGroupQuestion
+    }
+  }
+
   @Patch('update/:id')
   update(@Param('id') id: string, @Body() updateGroupQuestionDto: UpdateGroupQuestionDto) {
     return this.groupQuestionService.update(id, updateGroupQuestionDto);
@@ -54,7 +63,7 @@ export class GroupQuestionController {
   }
 
   @Delete(':id/delete-question-or-ansOptions')
-  removeQuesOrAnsOp(@Param('id') id: string, @Body() deletQueOrAnsOpDto:DeletQueOrAnsOpDto) {
+  removeQuesOrAnsOp(@Param('id') id: string, @Body() deletQueOrAnsOpDto: DeletQueOrAnsOpDto) {
     return this.groupQuestionService.deleteQueOrAnsOPs(id, deletQueOrAnsOpDto)
   }
 }

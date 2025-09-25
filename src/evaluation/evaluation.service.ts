@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, NotAcceptableException, NotFoundException } from '@nestjs/common';
 import { CreateEvaluationDto } from './dto/agent-evaluation-dto/create-evaluation.dto';
 import { UpdateEvaluationDto } from './dto/agent-evaluation-dto/update-evaluation.dto';
 import { DataSource, EntityManager, Repository } from 'typeorm';
@@ -9,6 +9,9 @@ import { EvalPerQuestion } from './entities/evaluationPerQuestion.entity';
 import { Question } from 'src/group-question/entities/question-entities/question.entity';
 import { QuestionAnswerOp } from 'src/group-question/entities/question-answer-option-entities/question_answerOP.entity';
 import { InjectRepository } from '@nestjs/typeorm';
+import { agentEvalStatus } from 'src/common/agent_evaluation.status';
+import { appealStatus } from 'src/common/appeal.status';
+import { GroupQuestionService } from 'src/group-question/group-question.service';
 
 @Injectable()
 export class EvaluationService {
@@ -16,8 +19,27 @@ export class EvaluationService {
   constructor(
     @InjectRepository(AgentEvaluation)
     private readonly agentEvaluationRepo: Repository<AgentEvaluation>,
+
+    private readonly groupQuestionService: GroupQuestionService,
     private readonly dataSource: DataSource,
   ) { }
+
+  private async validateEvalCreation(groupQuestion: GroupQuestion, createEvaluationDto: CreateEvaluationDto | UpdateEvaluationDto) {
+    if (createEvaluationDto instanceof CreateEvaluationDto) {
+      // validate the dto
+      const { audios } = createEvaluationDto;
+      const quesUnderGroupQue: string[] = groupQuestion.question.map(ques => ques.id)
+
+      for (const audio of audios) {
+        const questionsDto: string[] = audio.questions.map(ques => ques.question_id)
+
+        const missedQuestion: string[] = quesUnderGroupQue.filter(question => !questionsDto.includes(question))
+        if (missedQuestion.length > 0) {
+          throw new NotAcceptableException(`audio with id ${audio.audio_id} not evaluated with these questions; ${missedQuestion} `)
+        }
+      }
+    }
+  }
 
   async create(createEvaluationDto: CreateEvaluationDto) {
     const queryRunner = this.dataSource.createQueryRunner();
@@ -28,15 +50,9 @@ export class EvaluationService {
     try {
       const { agent_assignment_id, audios } = createEvaluationDto;
 
-      const groupQuestion = await entityManager.findOne(GroupQuestion, {
-        where: {
-          is_active: true
-        }
-      })
+      const { groupQuestion } = await this.groupQuestionService.getActiveGroupQuestion()
 
-      if (!groupQuestion) {
-        throw new NotFoundException("no active group question is found !")
-      }
+      await this.validateEvalCreation(groupQuestion, createEvaluationDto)
 
       const createdAgentEvaluation = new AgentEvaluation()
       createdAgentEvaluation.agent_assignment_id = agent_assignment_id
@@ -83,7 +99,7 @@ export class EvaluationService {
         createdAudioEvaluation.updated_at = null
         await entityManager.save(EvalPerAudio, createdAudioEvaluation)
       }
-      createdAgentEvaluation.result = agentResult
+      createdAgentEvaluation.result = agentResult / audios.length
       createdAgentEvaluation.updated_at = null
       entityManager.save(AgentEvaluation, createdAgentEvaluation)
       await entityManager.queryRunner?.commitTransaction()
@@ -109,7 +125,7 @@ export class EvaluationService {
     const entityManager: EntityManager = queryRunner.manager;
     try {
       const res = await entityManager.find(AgentEvaluation, {
-        relations: ['group_question', 'eval_per_audio', 'eval_per_audio.eval_per_question', 'eval_per_audio.eval_per_question.question_answerOP', 'eval_per_audio.eval_per_question.question']
+        relations: ['group_question', 'eval_per_audio', 'eval_per_audio.eval_per_question', 'eval_per_audio.eval_per_question.question_answerOp', 'eval_per_audio.eval_per_question.question']
       })
       return {
         success: true,
@@ -131,7 +147,7 @@ export class EvaluationService {
     try {
       const res = await entityManager.findOne(AgentEvaluation, {
         where: { id },
-        relations: ['group_question', 'eval_per_audio', 'eval_per_audio.eval_per_question', 'eval_per_audio.eval_per_question.question_answerOP', 'eval_per_audio.eval_per_question.question']
+        relations: ['group_question', 'eval_per_audio', 'eval_per_audio.eval_per_question', 'eval_per_audio.eval_per_question.question_answerOp', 'eval_per_audio.eval_per_question.question']
       })
       if (!res) {
         throw new NotFoundException(`evaluation with id ${id} not found`)
@@ -201,7 +217,8 @@ export class EvaluationService {
         await entityManager.save(EvalPerAudio, evalPerAudio)
         newAgentResult += evalPerAudio.result
       }
-      agentEvaluation.result = newAgentResult
+      agentEvaluation.result = newAgentResult / updateEvaluationDto.audios.length
+
       await entityManager.save(AgentEvaluation, agentEvaluation)
       await entityManager.queryRunner?.commitTransaction()
       return {
@@ -317,6 +334,68 @@ export class EvaluationService {
       }
     } finally {
       await queryRunner.release();
+    }
+  }
+
+  //agent evaluation id
+  async close(id: string) {
+    try {
+      const evaluation = await this.agentEvaluationRepo.findOne({
+        where: { id },
+        relations: ['eval_per_audio', 'eval_per_audio.appeal']
+      })
+
+      if (!evaluation) {
+        throw new NotFoundException(`evaluation with id ${id} not found.`)
+      }
+
+      const audioEvaluations: EvalPerAudio[] = evaluation.eval_per_audio
+      for (const audioEvaluation of audioEvaluations) {
+        if (audioEvaluation.appeal.status == appealStatus.UNDER_REVIEW || audioEvaluation.appeal.status == appealStatus.DRAFT) {
+          throw new BadRequestException(`apeal up on audio with ${audioEvaluation.audio_id} should be closed before closing agent evaluation.`)
+        }
+      }
+      evaluation.status = agentEvalStatus.COMPLETED
+
+      await this.agentEvaluationRepo.save(evaluation)
+      return {
+        success: true,
+        message: `agent evaluation with agent evaluation id ${id} status is successfully changed to ${evaluation.status}`,
+        evaluation,
+      }
+    } catch (error) {
+      if (error instanceof BadRequestException || error instanceof NotFoundException) {
+        throw error
+      } else {
+        console.error(error);
+        throw new InternalServerErrorException("error occured during changing status to under review.")
+      }
+
+    }
+  }
+
+  //agent evaluation id
+  async updateEvalStatus(id: string) {
+    const evaluation = await this.agentEvaluationRepo.findOne({
+      where: { id },
+      relations: ['eval_per_audio', 'eval_per_audio.appeal']
+    })
+    if (!evaluation) {
+      throw new NotFoundException('agent evaluation not found')
+    }
+    const appeals = evaluation.eval_per_audio.map(audioEval => audioEval.appeal);
+    if (appeals.length > 0 && appeals.some(appeal =>
+      (appeal && appeal.status == appealStatus.UNDER_REVIEW) ||
+      (appeal && appeal.status != appealStatus.DRAFT)
+    )) {
+      evaluation.status = agentEvalStatus.UNDER_REVIEW
+      await this.agentEvaluationRepo.save(evaluation)
+    } else {
+      evaluation.status = agentEvalStatus.DRAFT
+      await this.agentEvaluationRepo.save(evaluation)
+    }
+    return {
+      appeals
     }
   }
 }

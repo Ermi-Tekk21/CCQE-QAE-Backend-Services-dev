@@ -4,12 +4,16 @@ import { UpdateCatagoryDto } from './dto/update-catagory.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Catagory } from './entities/catagory.entity';
 import { Repository } from 'typeorm';
+import { Question } from 'src/group-question/entities/question-entities/question.entity';
 
 @Injectable()
 export class CatagoryService {
   constructor(
     @InjectRepository(Catagory)
-    private readonly catagoryRepo: Repository<Catagory>
+    private readonly catagoryRepo: Repository<Catagory>,
+
+    @InjectRepository(Question)
+    private readonly questionRepo: Repository<Question>
   ) { }
 
   async create(createCatagoryDto: CreateCatagoryDto) {
@@ -69,6 +73,29 @@ export class CatagoryService {
         throw new InternalServerErrorException("Error occurred during looking for specified catagory");
       }
     }
+  }
+
+  async getAllQuesPerCatagory(id: string) {
+    const questionCount = await this.questionRepo.count({
+      where: {
+        catagory: {
+          id: id,
+        },
+      },
+    });
+
+    const questions = await this.questionRepo.find({
+      where: {
+        catagory: {
+          id: id,
+        },
+      }, relations: ['question_lookup']
+    });
+    return {
+      success: true,
+      questionCount,
+      questions
+    };
   }
 
   async update(id: string, updateCatagoryDto: UpdateCatagoryDto) {
