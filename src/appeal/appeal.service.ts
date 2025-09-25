@@ -8,6 +8,7 @@ import { EvalPerAudio } from 'src/evaluation/entities/evaluationPerAudio.entity'
 import { appealStatus } from 'src/common/appeal.status';
 import { agentEvalStatus } from 'src/common/agent_evaluation.status';
 import { EvaluationService } from 'src/evaluation/evaluation.service';
+import { error } from 'console';
 
 @Injectable()
 export class AppealService {
@@ -275,6 +276,10 @@ export class AppealService {
     try {
       const { appeal } = await this.findOne(id)
 
+      // if appeal is declined, the user can not return its status to draft.
+      if (appeal.is_declined) {
+        throw new ConflictException('Cannot return a declined appeal to draft status.')
+      }
       appeal.status = appealStatus.DRAFT
       await this.appealRepo.save(appeal)
 
@@ -300,6 +305,7 @@ export class AppealService {
     try {
       const { appeal } = await this.findOne(id)
       appeal.status = appealStatus.COMPLETED
+      appeal.is_declined = true
       await this.appealRepo.save(appeal)
       return {
         success: true,
