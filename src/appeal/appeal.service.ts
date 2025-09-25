@@ -8,7 +8,6 @@ import { EvalPerAudio } from 'src/evaluation/entities/evaluationPerAudio.entity'
 import { appealStatus } from 'src/common/appeal.status';
 import { agentEvalStatus } from 'src/common/agent_evaluation.status';
 import { EvaluationService } from 'src/evaluation/evaluation.service';
-import { error } from 'console';
 
 @Injectable()
 export class AppealService {
@@ -307,6 +306,7 @@ export class AppealService {
       appeal.status = appealStatus.COMPLETED
       appeal.is_declined = true
       await this.appealRepo.save(appeal)
+
       return {
         success: true,
         message: "status successfully changed to completed with declining the appeal"

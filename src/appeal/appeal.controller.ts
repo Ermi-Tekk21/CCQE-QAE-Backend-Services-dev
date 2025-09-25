@@ -56,4 +56,9 @@ export class AppealController {
   returnToDraft(@Param('id') id: string) {
     return this.appealService.returnToDraft(id)
   }
+
+  @Patch('close-and-decline/:id')
+  decline(@Param('id') id: string) {
+    return this.appealService.decline(id)
+  }
 }
