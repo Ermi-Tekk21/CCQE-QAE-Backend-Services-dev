@@ -5,6 +5,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Catagory } from './entities/catagory.entity';
 import { Repository } from 'typeorm';
 import { Question } from 'src/group-question/entities/question-entities/question.entity';
+import { paginate } from 'src/common/utils/paginate';
 
 @Injectable()
 export class CatagoryService {
@@ -39,14 +40,17 @@ export class CatagoryService {
     }
   }
 
-  async findAll() {
+  async findAll(page: number, limit: number, sort: string) {
     try {
-      const catagories = await this.catagoryRepo.find()
+      const paginatedCatagories = await paginate(this.catagoryRepo, page, limit, sort)
       return {
         success: true,
-        catagories
+        catagories: paginatedCatagories.data,
+        meta: paginatedCatagories.meta
       }
-    } catch {
+    } catch (error) {
+      console.error(error);
+
       throw new InternalServerErrorException("somthing bad happend")
     }
   }
