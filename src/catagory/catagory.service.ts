@@ -40,9 +40,10 @@ export class CatagoryService {
     }
   }
 
-  async findAll(page: number, limit: number, sort: string) {
+  async findAll(page: number, limit: number, sortOrder: string) {
     try {
-      const paginatedCatagories = await paginate(this.catagoryRepo, page, limit, sort)
+      const sorting = (sortOrder === 'ASC' || sortOrder === 'DESC') ? sortOrder : 'DESC';
+      const paginatedCatagories = await paginate(this.catagoryRepo, page, limit, sorting)
       return {
         success: true,
         catagories: paginatedCatagories.data,

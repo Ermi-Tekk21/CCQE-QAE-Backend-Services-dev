@@ -5,7 +5,7 @@ export async function paginate<T extends import('typeorm').ObjectLiteral>(
     query: Repository<T> | SelectQueryBuilder<T>,
     page: number,
     limit: number,
-    sort: 'DESC' | 'ASC' = 'DESC'
+    sorting: 'DESC' | 'ASC' = 'DESC'
 ) {
     const skip = (page - 1) * limit;
 
@@ -19,7 +19,7 @@ export async function paginate<T extends import('typeorm').ObjectLiteral>(
     const [data, total] = await queryBuilder
         .skip(skip)
         .take(limit)
-        .orderBy('created_at', sort)
+        .orderBy('created_at', sorting)
         .getManyAndCount();
 
     return {
