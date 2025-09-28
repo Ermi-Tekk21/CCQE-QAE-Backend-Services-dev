@@ -4,6 +4,7 @@ import { UpdateQuestionLookupDto } from './dto/update-question-lookup.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { QuestionLookup } from './entities/question-lookup.entity';
 import { Repository } from 'typeorm';
+import { paginate } from 'src/common/utils/paginate';
 
 @Injectable()
 export class QuestionLookupService {
@@ -38,11 +39,14 @@ export class QuestionLookupService {
         }
     }
 
-    async findAll() {
-        const questions = await this.questionLookupRepo.find()
+    async findAll(page: number, limit: number, sortOrder: 'ASC' | 'DESC' = 'DESC') {
+        const paginatedQuestions = await paginate(this.questionLookupRepo, page, limit, {
+            order: { created_at: sortOrder }
+        })
         return {
             success: true,
-            questions
+            questions: paginatedQuestions.data,
+            meta: paginatedQuestions.meta
         }
     }
 
