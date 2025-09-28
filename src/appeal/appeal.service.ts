@@ -8,6 +8,7 @@ import { EvalPerAudio } from 'src/evaluation/entities/evaluationPerAudio.entity'
 import { appealStatus } from 'src/common/appeal.status';
 import { agentEvalStatus } from 'src/common/agent_evaluation.status';
 import { EvaluationService } from 'src/evaluation/evaluation.service';
+import { paginate } from 'src/common/utils/paginate';
 
 @Injectable()
 export class AppealService {
@@ -57,12 +58,18 @@ export class AppealService {
     }
   }
 
-  async findAll() {
+  async findAll(page: number, limit: number, sortOrder: 'ASC' | 'DESC' = 'DESC') {
     try {
-      const appeals = await this.appealRepo.find({ relations: ['evaluation_per_audio'] });
+      const paginatedAppeals = await paginate(this.appealRepo, page, limit,
+        {
+          order: { created_at: sortOrder },
+          relations: ['evaluation_per_audio']
+        }
+      )
       return {
         success: true,
-        appeals
+        appeals: paginatedAppeals.data,
+        meta: paginatedAppeals.meta
       }
     } catch (error) {
       console.error(error);
@@ -71,20 +78,22 @@ export class AppealService {
   }
 
   // agentid
-  async findAppealsPerAgentId(id: string) {
+  async findAppealsPerAgentId(id: string, page: number, limit: number, sortOrder: 'ASC' | 'DESC' = 'DESC') {
     try {
-      const appeals = await this.appealRepo.find({
-        where: {
-          agent_id: id
-        }, relations: ['evaluation_per_audio', 'evaluation_per_audio.agent_evaluation']
-      });
-      if (!appeals || appeals.length == 0) {
+      const paginatedAppeals = await paginate(this.appealRepo, page, limit, {
+        where: { agent_id: id },
+        relations: ['evaluation_per_audio', 'evaluation_per_audio.agent_evaluation'],
+        order: { created_at: sortOrder }
+      })
+
+      if (!paginatedAppeals.data || paginatedAppeals.data.length == 0) {
         throw new NotFoundException(`appeals from agent id ${id} not found.`)
       }
 
       return {
         success: true,
-        appeals
+        appeals: paginatedAppeals.data,
+        meta: paginatedAppeals.meta
       }
     } catch (error) {
       if (error instanceof NotFoundException) {
@@ -198,7 +207,14 @@ export class AppealService {
   //agent id
   async removeAllApealsUnderAgent(id: string) {
     try {
-      const { appeals } = await this.findAppealsPerAgentId(id)
+      const appeals = await this.appealRepo.find({
+        where: {
+          agent_id: id
+        }, relations: ['evaluation_per_audio', 'evaluation_per_audio.agent_evaluation']
+      });
+      if (!appeals || appeals.length == 0) {
+        throw new NotFoundException(`appeals from agent id ${id} not found.`)
+      }
       // If appeal is an array, map to ids; if it's a single object, wrap in array
       const appealIds = appeals.map((a) => a.id);
       await this.appealRepo.delete(appealIds)

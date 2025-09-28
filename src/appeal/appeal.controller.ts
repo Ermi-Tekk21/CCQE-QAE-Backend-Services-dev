@@ -1,7 +1,8 @@
-import { Controller, Get, Post, Body, Put, Param, Delete, Patch } from '@nestjs/common';
+import { Controller, Get, Post, Body, Put, Param, Delete, Patch, Query } from '@nestjs/common';
 import { AppealService } from './appeal.service';
 import { CreateAppealDto } from './dto/create-appeal.dto';
 import { UpdateAppealDto } from './dto/update-appeal.dto';
+import { PaginationDto } from 'src/common/dto/pagination.dto';
 
 @Controller('appeal')
 export class AppealController {
@@ -13,8 +14,10 @@ export class AppealController {
   }
 
   @Get()
-  findAll() {
-    return this.appealService.findAll();
+  findAll(@Query() pagination: PaginationDto) {
+    const { page, limit, sort_order } = pagination;
+
+    return this.appealService.findAll(page, limit, sort_order as 'ASC' | 'DESC');
   }
 
   @Get(':id')
@@ -23,8 +26,12 @@ export class AppealController {
   }
 
   @Get('agent/:id')
-  findAppealsUnderSpecAgent(@Param('id') id: string) {
-    return this.appealService.findAppealsPerAgentId(id);
+  findAppealsUnderSpecAgent(
+    @Param('id') id: string,
+    @Query() pagination: PaginationDto) {
+    const { page, limit, sort_order } = pagination;
+
+    return this.appealService.findAppealsPerAgentId(id, page, limit, sort_order as 'ASC' | 'DESC');
   }
 
   @Put(':id')
