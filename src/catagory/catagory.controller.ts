@@ -15,9 +15,9 @@ export class CatagoryController {
 
   @Get('fetch-all')
   findAll(@Query() pagination: PaginationDto) {
-    const { page, limit, sort } = pagination;
+    const { page, limit, sort_order } = pagination;
 
-    return this.catagoryService.findAll(page, limit, sort);
+    return this.catagoryService.findAll(page, limit, sort_order as 'ASC' | 'DESC');
   }
 
   @Get(':id')
@@ -25,9 +25,14 @@ export class CatagoryController {
     return this.catagoryService.findOne(id);
   }
 
-  @Get('questions/:id')
-  fetchQuesUnderCatagory(@Param('id') id: string) {
-    return this.catagoryService.getAllQuesPerCatagory(id)
+  @Get(':id/questions')
+  fetchQuesUnderCatagory(
+    @Param('id') id: string,
+    @Query() pagination: PaginationDto
+  ) {
+
+    const { page, limit, sort_order } = pagination;
+    return this.catagoryService.getAllQuesPerCatagory(id, page, limit, sort_order as 'ASC' | 'DESC');
   }
 
   @Patch(':id')

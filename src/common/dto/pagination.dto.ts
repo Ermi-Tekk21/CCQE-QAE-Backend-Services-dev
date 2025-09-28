@@ -19,5 +19,5 @@ export class PaginationDto {
   @Type(() => String)
   @IsString()
   @IsIn(["ASC", "DESC"], { message: 'sort must be either ASC or DESC' })
-  sort: string;
+  sort_order: string;
 }

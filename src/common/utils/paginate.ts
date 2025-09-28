@@ -1,25 +1,47 @@
-import { Repository, SelectQueryBuilder } from 'typeorm';
+import { FindManyOptions, ObjectLiteral, Repository, SelectQueryBuilder } from 'typeorm';
 
-
-export async function paginate<T extends import('typeorm').ObjectLiteral>(
-    query: Repository<T> | SelectQueryBuilder<T>,
+export async function paginate<T extends ObjectLiteral>(
+    repositoryOrQueryBuilder: Repository<T> | SelectQueryBuilder<T>,
     page: number,
     limit: number,
-    sorting: 'DESC' | 'ASC' = 'DESC'
+    options?: FindManyOptions<T>
 ) {
     const skip = (page - 1) * limit;
 
     let queryBuilder: SelectQueryBuilder<T>;
-    if (query instanceof Repository) {
-        queryBuilder = query.createQueryBuilder();
+
+    if (repositoryOrQueryBuilder instanceof Repository) {
+        queryBuilder = repositoryOrQueryBuilder.createQueryBuilder('entity');
     } else {
-        queryBuilder = query;
+        queryBuilder = repositoryOrQueryBuilder;
+    }
+
+    if (options?.where) {
+        queryBuilder.where(options.where);
+    }
+
+    if (options?.relations) {
+        if (Array.isArray(options.relations)) {
+            options.relations.forEach(relation => {
+                queryBuilder.leftJoinAndSelect(`entity.${relation}`, relation);
+            });
+        } else {
+            Object.keys(options.relations).forEach(relation => {
+                queryBuilder.leftJoinAndSelect(`entity.${relation}`, relation);
+            });
+        }
+    }
+
+    if (options?.order) {
+        const order = options.order as { [key: string]: 'ASC' | 'DESC' };
+        Object.keys(order).forEach(key => {
+            queryBuilder.addOrderBy(`entity.${key}`, order[key]);
+        });
     }
 
     const [data, total] = await queryBuilder
         .skip(skip)
         .take(limit)
-        .orderBy('created_at', sorting)
         .getManyAndCount();
 
     return {

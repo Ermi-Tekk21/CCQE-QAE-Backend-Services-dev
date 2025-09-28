@@ -40,19 +40,19 @@ export class CatagoryService {
     }
   }
 
-  async findAll(page: number, limit: number, sortOrder: string) {
+  async findAll(page: number, limit: number, sortOrder: 'ASC' | 'DESC' = 'DESC') {
     try {
-      const sorting = (sortOrder === 'ASC' || sortOrder === 'DESC') ? sortOrder : 'DESC';
-      const paginatedCatagories = await paginate(this.catagoryRepo, page, limit, sorting)
+      const paginatedCatagories = await paginate(this.catagoryRepo, page, limit, {
+        order: { created_at: sortOrder },
+      });
       return {
         success: true,
         catagories: paginatedCatagories.data,
-        meta: paginatedCatagories.meta
-      }
+        meta: paginatedCatagories.meta,
+      };
     } catch (error) {
       console.error(error);
-
-      throw new InternalServerErrorException("somthing bad happend")
+      throw new InternalServerErrorException('something bad happened');
     }
   }
 
@@ -80,26 +80,23 @@ export class CatagoryService {
     }
   }
 
-  async getAllQuesPerCatagory(id: string) {
-    const questionCount = await this.questionRepo.count({
+  async getAllQuesPerCatagory(id: string, page: number, limit: number, sortOrder: 'ASC' | 'DESC' = 'DESC') {
+    const paginatedQuestions = await paginate(this.questionRepo, page, limit, {
       where: {
         catagory: {
           id: id,
         },
       },
+      order: {
+        created_at: sortOrder
+      },
+      relations: ['question_lookup'],
     });
 
-    const questions = await this.questionRepo.find({
-      where: {
-        catagory: {
-          id: id,
-        },
-      }, relations: ['question_lookup']
-    });
     return {
       success: true,
-      questionCount,
-      questions
+      questions: paginatedQuestions.data,
+      meta: paginatedQuestions.meta,
     };
   }
 
