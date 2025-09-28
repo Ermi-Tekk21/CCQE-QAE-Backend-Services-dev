@@ -1,7 +1,8 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestjs/common';
 import { AnswerOptionLookupService } from './answer-option-lookup.service';
 import { CreateAnswerOptionLookupDto } from './dto/create-answer-option-lookup.dto';
 import { UpdateAnswerOptionLookupDto } from './dto/update-answer-option-lookup.dto';
+import { PaginationDto } from 'src/common/dto/pagination.dto';
 
 @Controller('answer-option-lookup')
 export class AnswerOptionLookupController {
@@ -13,8 +14,10 @@ export class AnswerOptionLookupController {
     }
 
     @Get('fetch-all')
-    findAll() {
-        return this.answerOptionLookupService.findAll();
+    findAll(@Query() pagination: PaginationDto) {
+        const { page, limit, sort_order } = pagination;
+
+        return this.answerOptionLookupService.findAll(page, limit, sort_order as 'ASC' | 'DESC');
     }
 
     @Get(':id')
