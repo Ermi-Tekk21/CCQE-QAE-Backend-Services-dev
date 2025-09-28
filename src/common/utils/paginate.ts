@@ -9,9 +9,10 @@ export async function paginate<T extends ObjectLiteral>(
     const skip = (page - 1) * limit;
 
     let queryBuilder: SelectQueryBuilder<T>;
+    const alias = 'entity';
 
     if (repositoryOrQueryBuilder instanceof Repository) {
-        queryBuilder = repositoryOrQueryBuilder.createQueryBuilder('entity');
+        queryBuilder = repositoryOrQueryBuilder.createQueryBuilder(alias);
     } else {
         queryBuilder = repositoryOrQueryBuilder;
     }
@@ -21,21 +22,31 @@ export async function paginate<T extends ObjectLiteral>(
     }
 
     if (options?.relations) {
-        if (Array.isArray(options.relations)) {
-            options.relations.forEach(relation => {
-                queryBuilder.leftJoinAndSelect(`entity.${relation}`, relation);
+        const relations = Array.isArray(options.relations) ? options.relations : Object.keys(options.relations);
+        relations.forEach(relation => {
+            const relationParts = relation.split('.');
+            let currentAlias = alias;
+            let propertyPath = '';
+
+            relationParts.forEach((part, index) => {
+                propertyPath += (index === 0 ? '' : '.') + part;
+                const newAlias = `${currentAlias}_${part}`;
+                const existingJoin = queryBuilder.expressionMap.joinAttributes.find(
+                    join => join.alias.name === newAlias
+                );
+
+                if (!existingJoin) {
+                    queryBuilder.leftJoinAndSelect(`${currentAlias}.${part}`, newAlias);
+                }
+                currentAlias = newAlias;
             });
-        } else {
-            Object.keys(options.relations).forEach(relation => {
-                queryBuilder.leftJoinAndSelect(`entity.${relation}`, relation);
-            });
-        }
+        });
     }
 
     if (options?.order) {
         const order = options.order as { [key: string]: 'ASC' | 'DESC' };
         Object.keys(order).forEach(key => {
-            queryBuilder.addOrderBy(`entity.${key}`, order[key]);
+            queryBuilder.addOrderBy(`${alias}.${key}`, order[key]);
         });
     }
 

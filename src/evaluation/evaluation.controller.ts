@@ -1,7 +1,8 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestjs/common';
 import { EvaluationService } from './evaluation.service';
 import { CreateEvaluationDto } from './dto/agent-evaluation-dto/create-evaluation.dto';
 import { UpdateEvaluationDto } from './dto/agent-evaluation-dto/update-evaluation.dto';
+import { PaginationDto } from 'src/common/dto/pagination.dto';
 
 @Controller('evaluation')
 export class EvaluationController {
@@ -13,8 +14,10 @@ export class EvaluationController {
   }
 
   @Get()
-  findAll() {
-    return this.evaluationService.findAll();
+  findAll(@Query() pagination: PaginationDto) {
+    const { page, limit, sort_order } = pagination;
+
+    return this.evaluationService.findAll(page, limit, sort_order as 'ASC' | 'DESC');
   }
 
   @Get(':id')

@@ -12,6 +12,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { agentEvalStatus } from 'src/common/agent_evaluation.status';
 import { appealStatus } from 'src/common/appeal.status';
 import { GroupQuestionService } from 'src/group-question/group-question.service';
+import { paginate } from 'src/common/utils/paginate';
 
 @Injectable()
 export class EvaluationService {
@@ -118,24 +119,25 @@ export class EvaluationService {
     }
   }
 
-  async findAll() {
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
-    const entityManager: EntityManager = queryRunner.manager;
+  async findAll(page: number, limit: number, sortOrder: 'ASC' | 'DESC' = 'DESC') {
     try {
-      const res = await entityManager.find(AgentEvaluation, {
-        relations: ['group_question', 'eval_per_audio', 'eval_per_audio.eval_per_question', 'eval_per_audio.eval_per_question.question_answerOp', 'eval_per_audio.eval_per_question.question']
-      })
+      const paginatedEvaluations = await paginate(
+        this.agentEvaluationRepo,
+        page,
+        limit,
+        {
+          relations: ['group_question', 'eval_per_audio', 'eval_per_audio.eval_per_question', 'eval_per_audio.eval_per_question.question_answerOp', 'eval_per_audio.eval_per_question.question'],
+          order: { created_at: sortOrder }
+        }
+      );
       return {
         success: true,
-        evaluation: res
+        evaluation: paginatedEvaluations.data,
+        meta: paginatedEvaluations.meta
       }
     } catch (error) {
       console.error(error);
       throw new InternalServerErrorException("internal server error occured during finding all existed evalautions")
-    } finally {
-      queryRunner.release()
     }
   }
 
