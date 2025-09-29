@@ -12,6 +12,7 @@ import { UpdateGroupQuestionDto } from './dto/group-question-dto/update-group-qu
 import { CreateGroupQuestionDto } from './dto/group-question-dto/create-group-question.dto';
 import { DeletQueOrAnsOpDto } from './dto/del-que-or-ansop-dto/delet-queOrAnsOp.dto';
 import { InjectRepository } from '@nestjs/typeorm';
+import { paginate } from 'src/common/utils/paginate';
 
 @Injectable()
 export class GroupQuestionService {
@@ -396,17 +397,26 @@ export class GroupQuestionService {
     }
   }
 
-  async findAll(): Promise<{
+  async findAll(page: number, limit: number, sortOrder: 'ASC' | 'DESC' = 'DESC'): Promise<{
     success: boolean,
-    "group questions": GroupQuestion[]
+    "group questions": GroupQuestion[],
+    meta: {}
   }> {
     try {
-      const groupQuestions = await this.dataSource.manager.find(GroupQuestion, {
-        relations: ['question', 'question.question_lookup', 'question.catagory', 'question.question_answer_option', 'question.question_answer_option.answer_option_lookup'],
-      });
+
+      const paginatedGroupQuestions = await paginate(
+        this.groupQuestionRepo,
+        page,
+        limit,
+        {
+          relations: ['question', 'question.question_lookup', 'question.catagory', 'question.question_answer_option', 'question.question_answer_option.answer_option_lookup'],
+          order: { created_at: sortOrder }
+        }
+      );
       return {
         success: true,
-        "group questions": groupQuestions
+        "group questions": paginatedGroupQuestions.data,
+        meta: paginatedGroupQuestions.meta
       }
     } catch (error) {
       console.error('Error finding all group questions:', error);

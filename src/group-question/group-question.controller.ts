@@ -1,8 +1,9 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestjs/common';
 import { GroupQuestionService } from './group-question.service';
 import { CreateGroupQuestionDto } from './dto/group-question-dto/create-group-question.dto';
 import { UpdateGroupQuestionDto } from './dto/group-question-dto/update-group-question.dto';
 import { DeletQueOrAnsOpDto } from './dto/del-que-or-ansop-dto/delet-queOrAnsOp.dto';
+import { PaginationDto } from 'src/common/dto/pagination.dto';
 
 @Controller('group-question')
 export class GroupQuestionController {
@@ -14,8 +15,10 @@ export class GroupQuestionController {
   }
 
   @Get()
-  findAll() {
-    return this.groupQuestionService.findAll();
+  findAll(@Query() pagination: PaginationDto) {
+    const { page, limit, sort_order } = pagination;
+
+    return this.groupQuestionService.findAll(page, limit, sort_order as 'ASC' | 'DESC');
   }
 
   @Get(':id')

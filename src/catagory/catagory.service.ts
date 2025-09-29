@@ -5,6 +5,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Catagory } from './entities/catagory.entity';
 import { Repository } from 'typeorm';
 import { Question } from 'src/group-question/entities/question-entities/question.entity';
+import { paginate } from 'src/common/utils/paginate';
 
 @Injectable()
 export class CatagoryService {
@@ -39,15 +40,19 @@ export class CatagoryService {
     }
   }
 
-  async findAll() {
+  async findAll(page: number, limit: number, sortOrder: 'ASC' | 'DESC' = 'DESC') {
     try {
-      const catagories = await this.catagoryRepo.find()
+      const paginatedCatagories = await paginate(this.catagoryRepo, page, limit, {
+        order: { created_at: sortOrder },
+      });
       return {
         success: true,
-        catagories
-      }
-    } catch {
-      throw new InternalServerErrorException("somthing bad happend")
+        catagories: paginatedCatagories.data,
+        meta: paginatedCatagories.meta,
+      };
+    } catch (error) {
+      console.error(error);
+      throw new InternalServerErrorException('something bad happened');
     }
   }
 
@@ -75,26 +80,23 @@ export class CatagoryService {
     }
   }
 
-  async getAllQuesPerCatagory(id: string) {
-    const questionCount = await this.questionRepo.count({
+  async getAllQuesPerCatagory(id: string, page: number, limit: number, sortOrder: 'ASC' | 'DESC' = 'DESC') {
+    const paginatedQuestions = await paginate(this.questionRepo, page, limit, {
       where: {
         catagory: {
           id: id,
         },
       },
+      order: {
+        created_at: sortOrder
+      },
+      relations: ['question_lookup'],
     });
 
-    const questions = await this.questionRepo.find({
-      where: {
-        catagory: {
-          id: id,
-        },
-      }, relations: ['question_lookup']
-    });
     return {
       success: true,
-      questionCount,
-      questions
+      questions: paginatedQuestions.data,
+      meta: paginatedQuestions.meta,
     };
   }
 
