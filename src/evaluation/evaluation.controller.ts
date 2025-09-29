@@ -25,6 +25,12 @@ export class EvaluationController {
     return this.evaluationService.findOne(id);
   }
 
+  // assignment id
+  @Get('assignment/:id')
+  findOneByAssignmentId(@Param('id') id: string) {
+    return this.evaluationService.findOneByAssignmentId(id);
+  }
+
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateEvaluationDto: UpdateEvaluationDto) {
     return this.evaluationService.update(id, updateEvaluationDto);

@@ -170,6 +170,35 @@ export class EvaluationService {
     }
   }
 
+  async findOneByAssignmentId(id: string) {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    const entityManager: EntityManager = queryRunner.manager;
+    try {
+      const evaluation = await entityManager.findOne(AgentEvaluation, {
+        where: { agent_assignment_id: id },
+        relations: ['group_question', 'eval_per_audio', 'eval_per_audio.eval_per_question', 'eval_per_audio.eval_per_question.question_answerOp', 'eval_per_audio.eval_per_question.question']
+      })
+      if (!evaluation) {
+        throw new NotFoundException(`evaluation with assignment id ${id} not found`)
+      }
+      return {
+        success: true,
+        evaluation: evaluation
+      }
+    } catch (error) {
+      console.error(error);
+      if (error instanceof NotFoundException) {
+        throw error
+      } else {
+        throw new InternalServerErrorException('internal error occured during finding this evaluation')
+      }
+    } finally {
+      queryRunner.release()
+    }
+  }
+
   async update(id: string, updateEvaluationDto: UpdateEvaluationDto) {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
