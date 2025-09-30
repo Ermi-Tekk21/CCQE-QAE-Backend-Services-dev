@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, InternalServerErrorException, NotAcceptableException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, InternalServerErrorException, NotAcceptableException, NotFoundException } from '@nestjs/common';
 import { CreateEvaluationDto } from './dto/agent-evaluation-dto/create-evaluation.dto';
 import { UpdateEvaluationDto } from './dto/agent-evaluation-dto/update-evaluation.dto';
 import { DataSource, EntityManager, Repository } from 'typeorm';
@@ -13,6 +13,8 @@ import { agentEvalStatus } from 'src/common/agent_evaluation.status';
 import { appealStatus } from 'src/common/appeal.status';
 import { GroupQuestionService } from 'src/group-question/group-question.service';
 import { paginate } from 'src/common/utils/paginate';
+import { ClientKafka } from '@nestjs/microservices';
+import { audioStatus } from 'src/common/audio.status';
 
 @Injectable()
 export class EvaluationService {
@@ -20,6 +22,9 @@ export class EvaluationService {
   constructor(
     @InjectRepository(AgentEvaluation)
     private readonly agentEvaluationRepo: Repository<AgentEvaluation>,
+
+    @Inject('KAFKA_SERVICE')
+    private readonly kafkaClient: ClientKafka,
 
     private readonly groupQuestionService: GroupQuestionService,
     private readonly dataSource: DataSource,
@@ -104,6 +109,16 @@ export class EvaluationService {
       createdAgentEvaluation.updated_at = null
       entityManager.save(AgentEvaluation, createdAgentEvaluation)
       await entityManager.queryRunner?.commitTransaction()
+
+      // produce kafka for each audio to update audio status at audio service
+      for (const audio of audios) {
+        const message = {
+          audio_id: audio.audio_id,
+          status: audioStatus.OPEN
+        }
+        const { message: kafkaMessage } = this.UpdateAudioStatus(message)
+        console.log(kafkaMessage);
+      }
 
       return {
         success: true,
@@ -382,13 +397,25 @@ export class EvaluationService {
 
       const audioEvaluations: EvalPerAudio[] = evaluation.eval_per_audio
       for (const audioEvaluation of audioEvaluations) {
-        if (audioEvaluation.appeal.status == appealStatus.UNDER_REVIEW || audioEvaluation.appeal.status == appealStatus.DRAFT) {
+        if (audioEvaluation.appeal && (audioEvaluation.appeal.status == appealStatus.UNDER_REVIEW || audioEvaluation.appeal.status == appealStatus.DRAFT)) {
           throw new BadRequestException(`apeal up on audio with ${audioEvaluation.audio_id} should be closed before closing agent evaluation.`)
         }
       }
       evaluation.status = agentEvalStatus.COMPLETED
 
       await this.agentEvaluationRepo.save(evaluation)
+
+      // produce kafka for each audio to update audio status at audio service
+      const audioIds = evaluation.eval_per_audio.map(evalPerAudio => evalPerAudio.audio_id)
+      for (const audioId of audioIds) {
+        const message = {
+          audio_id: audioId,
+          status: audioStatus.COMPLETED
+        }
+        const { message: kafkaMessage } = this.UpdateAudioStatus(message)
+        console.log(kafkaMessage);
+      }
+
       return {
         success: true,
         message: `agent evaluation with agent evaluation id ${id} status is successfully changed to ${evaluation.status}`,
@@ -399,7 +426,7 @@ export class EvaluationService {
         throw error
       } else {
         console.error(error);
-        throw new InternalServerErrorException("error occured during changing status to under review.")
+        throw new InternalServerErrorException("error occured during clossing this evaluation.")
       }
 
     }
@@ -428,5 +455,10 @@ export class EvaluationService {
     return {
       appeals
     }
+  }
+
+  UpdateAudioStatus(message: { audio_id: string, status: string }) {
+    this.kafkaClient.emit('evaluation_status_updater', message);
+    return { message: `audio with id ${message.audio_id} status has been changed to ${message.status}` };
   }
 }

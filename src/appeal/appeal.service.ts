@@ -26,6 +26,7 @@ export class AppealService {
   async create(createAppealDto: CreateAppealDto) {
     try {
       const newAppeals: Appeal[] = []
+      
       for (const audioAppealId of createAppealDto.audio_evaluation_ids) {
 
         const audioEval = await this.evalPerAudioRepo.findOne({ where: { id: audioAppealId } });
@@ -233,7 +234,8 @@ export class AppealService {
     }
   }
 
-  //appeal id
+  // appeal id
+  // kafka produce message: {status: under review}
   async underReview(id: string) {
     try {
       const { appeal } = await this.findOne(id)
@@ -244,6 +246,7 @@ export class AppealService {
       appeal.evaluation_per_audio.agent_evaluation.status = agentEvalStatus.UNDER_REVIEW
       await this.appealRepo.save(appeal)
       await this.evaluationService.updateEvalStatus(appeal.evaluation_per_audio.agent_evaluation.id)
+      
       return {
         success: true,
         message: `appeal with id ${id} status is successfully changed to ${appeal.status}`,
@@ -270,6 +273,7 @@ export class AppealService {
       appeal.status = appealStatus.COMPLETED
       await this.appealRepo.save(appeal)
       await this.evaluationService.updateEvalStatus(appeal.evaluation_per_audio.agent_evaluation.id)
+
       return {
         success: true,
         message: `appeal with id ${id} status is successfully changed to ${appeal.status}`,
@@ -282,7 +286,6 @@ export class AppealService {
         console.error(error);
         throw new InternalServerErrorException("error occured during changing status to completed.")
       }
-
     }
   }
 

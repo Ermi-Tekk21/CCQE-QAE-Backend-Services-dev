@@ -7,8 +7,9 @@ import { EvalPerAudio } from 'src/evaluation/entities/evaluationPerAudio.entity'
 import { EvaluationModule } from 'src/evaluation/evaluation.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Appeal, EvalPerAudio]),
-  forwardRef(() => EvaluationModule)
+  imports: [
+    TypeOrmModule.forFeature([Appeal, EvalPerAudio]),
+    forwardRef(() => EvaluationModule),
   ],
   controllers: [AppealController],
   providers: [AppealService],
