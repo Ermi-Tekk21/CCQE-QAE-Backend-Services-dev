@@ -1,4 +1,4 @@
-import { ConflictException, Inject, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { CreateAppealDto } from './dto/create-appeal.dto';
 import { UpdateAppealDto } from './dto/update-appeal.dto';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -9,8 +9,6 @@ import { appealStatus } from 'src/common/appeal.status';
 import { agentEvalStatus } from 'src/common/agent_evaluation.status';
 import { EvaluationService } from 'src/evaluation/evaluation.service';
 import { paginate } from 'src/common/utils/paginate';
-import { audioStatus } from 'src/common/audio.status';
-import { ClientKafka } from '@nestjs/microservices';
 
 @Injectable()
 export class AppealService {
@@ -21,22 +19,14 @@ export class AppealService {
     @InjectRepository(EvalPerAudio)
     private readonly evalPerAudioRepo: Repository<EvalPerAudio>,
 
-    @Inject('KAFKA_SERVICE')
-    private readonly kafkaClient: ClientKafka,
-
     private readonly evaluationService: EvaluationService,
     private readonly datasource: DataSource,
   ) { }
 
-
-  UpdateAudioStatus(message: { audio_id: string, status: string }) {
-    this.kafkaClient.emit('evaluation_status_updater', message);
-    return { message: `audio with id ${message.audio_id} status has been changed to ${message.status}` };
-  }
-
   async create(createAppealDto: CreateAppealDto) {
     try {
       const newAppeals: Appeal[] = []
+      
       for (const audioAppealId of createAppealDto.audio_evaluation_ids) {
 
         const audioEval = await this.evalPerAudioRepo.findOne({ where: { id: audioAppealId } });
@@ -256,14 +246,6 @@ export class AppealService {
       appeal.evaluation_per_audio.agent_evaluation.status = agentEvalStatus.UNDER_REVIEW
       await this.appealRepo.save(appeal)
       await this.evaluationService.updateEvalStatus(appeal.evaluation_per_audio.agent_evaluation.id)
-
-      // message to be sent to the kafka consumer
-      const message = {
-        audio_id: appeal.evaluation_per_audio.audio_id,
-        status: audioStatus.UNDER_REVIEW
-      }
-      const {message: kafkaMessage} = this.UpdateAudioStatus(message)
-      console.log(kafkaMessage);
       
       return {
         success: true,
@@ -291,14 +273,6 @@ export class AppealService {
       appeal.status = appealStatus.COMPLETED
       await this.appealRepo.save(appeal)
       await this.evaluationService.updateEvalStatus(appeal.evaluation_per_audio.agent_evaluation.id)
-
-      // message to be sent to the kafka consumer
-      const message = {
-        audio_id: appeal.evaluation_per_audio.audio_id,
-        status: audioStatus.COMPLETED
-      }
-      const {message: kafkaMessage} = this.UpdateAudioStatus(message)
-      console.log(kafkaMessage);
 
       return {
         success: true,

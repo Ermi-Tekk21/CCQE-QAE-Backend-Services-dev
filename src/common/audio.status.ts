@@ -1,5 +1,4 @@
 export enum audioStatus {
-    DRAFT = 'DRAFT',
-    UNDER_REVIEW = 'UNDER_REVIEW',
+    OPEN = 'OPEN',
     COMPLETED = 'COMPLETED',
 }
