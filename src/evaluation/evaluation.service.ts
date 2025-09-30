@@ -397,7 +397,7 @@ export class EvaluationService {
 
       const audioEvaluations: EvalPerAudio[] = evaluation.eval_per_audio
       for (const audioEvaluation of audioEvaluations) {
-        if (audioEvaluation.appeal.status == appealStatus.UNDER_REVIEW || audioEvaluation.appeal.status == appealStatus.DRAFT) {
+        if (audioEvaluation.appeal && (audioEvaluation.appeal.status == appealStatus.UNDER_REVIEW || audioEvaluation.appeal.status == appealStatus.DRAFT)) {
           throw new BadRequestException(`apeal up on audio with ${audioEvaluation.audio_id} should be closed before closing agent evaluation.`)
         }
       }
@@ -426,7 +426,7 @@ export class EvaluationService {
         throw error
       } else {
         console.error(error);
-        throw new InternalServerErrorException("error occured during changing status to under review.")
+        throw new InternalServerErrorException("error occured during clossing this evaluation.")
       }
 
     }
