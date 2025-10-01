@@ -116,9 +116,18 @@ export class EvaluationService {
           audio_id: audio.audio_id,
           status: audioStatus.OPEN
         }
-        const { message: kafkaMessage } = this.UpdateAudioStatus(message)
-        console.log(kafkaMessage);
+        const { message: audioKafkaMessage } = this.UpdateAudioStatus(message)
+        console.log(audioKafkaMessage);
       }
+
+
+      // produce kafka for notifing the evaluated agent
+      const notifyMessage = {
+        assignmentId: agent_assignment_id,
+        evaluation: createdAgentEvaluation
+      }
+      const { message: notifyKafkaMessage } = this.notifyAgentEval(notifyMessage)
+      console.log(notifyKafkaMessage);
 
       return {
         success: true,
@@ -459,6 +468,11 @@ export class EvaluationService {
 
   UpdateAudioStatus(message: { audio_id: string, status: string }) {
     this.kafkaClient.emit('evaluation_status_updater', message);
-    return { message: `audio with id ${message.audio_id} status has been changed to ${message.status}` };
+    return { message: `audio with id ${message.audio_id} status has been changed to ${message.status} and it's status produced to audio service.` };
+  }
+
+  notifyAgentEval(message: { assignmentId: string, evaluation: AgentEvaluation }) {
+    this.kafkaClient.emit('notify_agent', message);
+    return { message: `evaluator-agents assignment with id ${message.assignmentId} has been evaluated and it's assignment id for this specific avaluation is produced to ums service.` };
   }
 }
