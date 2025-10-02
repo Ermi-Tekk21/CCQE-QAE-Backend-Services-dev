@@ -49,9 +49,17 @@ export class GroupQuestionService {
 
     // 2. Check for an existing GroupQuestion for the current month.
     const currentDate = new Date();
+    currentDate.setMonth(currentDate.getMonth() - 1);
     const month = currentDate.toLocaleString('en-US', { month: 'short' });
     const year = currentDate.getFullYear().toString();
     const groupQuestionName = `${month}/${year}/EP`;
+
+    const dayDifference = (createGroupQuestionDto.evaluation_ends_at.getDate() - currentDate.getDate());
+    if (dayDifference > 10) {
+      throw new BadRequestException(
+        `Invalid evaluation end date: the difference between today's date (${currentDate.toDateString()}) and the evaluation end date (${createGroupQuestionDto.evaluation_ends_at.toDateString()}) is ${dayDifference} days, which exceeds the allowed maximum of 10 days. Please ensure the evaluation period does not exceed 10 days from the current date.`
+      );
+    }
 
     const doesOtherExistWithnThisMonth = await entityManager.findOne(GroupQuestion, {
       where: { name: groupQuestionName, is_deleted: false },
@@ -85,6 +93,7 @@ export class GroupQuestionService {
     // Create the GroupQuestion entity instance in memory.
     const createdByUserId = createGroupQuestionDto.created_by;
     const currentDate = new Date();
+    currentDate.setMonth(currentDate.getMonth() - 1);
     const month = currentDate.toLocaleString('en-US', { month: 'short' });
     const year = currentDate.getFullYear().toString();
     const groupQuestionName = `${month}/${year}/EP`;
@@ -279,6 +288,7 @@ export class GroupQuestionService {
     const changes = this.compareQuestionsAndGenerateChanges(parent.question, questions);
 
     const currentDate = new Date();
+    currentDate.setMonth(currentDate.getMonth() - 1);
     const month = currentDate.toLocaleString('en-US', { month: 'short' });
     const year = currentDate.getFullYear().toString();
 
