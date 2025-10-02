@@ -14,6 +14,8 @@ import { DeletQueOrAnsOpDto } from './dto/del-que-or-ansop-dto/delet-queOrAnsOp.
 import { InjectRepository } from '@nestjs/typeorm';
 import { paginate } from 'src/common/utils/paginate';
 import { agentEvalStatus } from 'src/common/agent_evaluation.status';
+import { CreateQuestionAnswerOPDto } from './dto/question-and-answer-option-dto/create-question_answerOP.dto';
+import { CreateQuestionDto } from './dto/question-dto/create-question.dto';
 
 @Injectable()
 export class GroupQuestionService {
@@ -291,6 +293,14 @@ export class GroupQuestionService {
     await entityManager.save(GroupQuestion, savedGroupQuestion);
   }
 
+  private validateQuestionAnsOP(ansOpData: CreateQuestionAnswerOPDto, question: CreateQuestionDto) {
+    if (ansOpData.weight > question.weight) {
+      throw new BadRequestException(
+        `Invalid weight for answer option '${ansOpData.content}': its weight (${ansOpData.weight}) must not exceed the weight of its parent question '${question.content}' (${question.weight}). Please ensure answer option weights are less than or equal to their parent question's weight.`
+      );
+    }
+  }
+
   private async processNestedQuestions(
     entityManager: EntityManager,
     savedGroupQuestion: GroupQuestion,
@@ -303,7 +313,9 @@ export class GroupQuestionService {
     const sumOfQuestionWeights = questionsDto.reduce((sum, question) => sum + question.weight, 0);
     if (sumOfQuestionWeights > 100) {
       console.error('group question exceedes 100; ', sumOfQuestionWeights);
-      throw new BadRequestException('You cannot create a group question with a total weight exceeding 100.')
+      throw new BadRequestException(
+        `Invalid total weight for group question: the sum of all question weights is ${sumOfQuestionWeights}, which exceeds the allowed maximum of 100. Please adjust the weights so that the total does not surpass 100 before creating the group question.`
+      );
     }
 
     for (const queData of questionsDto) {
@@ -335,6 +347,7 @@ export class GroupQuestionService {
       // Process and save nested Answer Options
       const createdQAO: QuestionAnswerOp[] = [];
       for (const ansData of queData.question_answer_option) {
+        this.validateQuestionAnsOP(ansData, queData)
         let answerOption = await entityManager.findOne(AnswerOptionLookup, { where: { content: ansData.content } });
         if (!answerOption) {
           answerOption = entityManager.create(AnswerOptionLookup, { content: ansData.content, created_by: queData.created_by, is_deleted: false });
@@ -474,8 +487,17 @@ export class GroupQuestionService {
     const questionsToSave: Question[] = [];
     console.log(questionsToSave);
 
+    const sumOfQuestionWeights = updatedQuestionsDto.reduce((sum, question) => sum + question.weight, 0);
+    if (sumOfQuestionWeights > 100) {
+      console.error('group question exceedes 100; ', sumOfQuestionWeights);
+      throw new BadRequestException(
+        `Invalid total weight for group question: the sum of all question weights is ${sumOfQuestionWeights}, which exceeds the allowed maximum of 100. Please adjust the weights so that the total does not surpass 100 before creating the group question.`
+      );
+    }
+
     // First pass: Process updates and new creations
     for (const dtoQ of updatedQuestionsDto) {
+
       let questionEntity: Question;
 
       if (dtoQ.id) {
@@ -594,6 +616,11 @@ export class GroupQuestionService {
     const qaosToSave: QuestionAnswerOp[] = [];
 
     for (const dtoQao of updatedQaoDto) {
+      if (dtoQao.weight > questionEntity.weight) {
+        throw new BadRequestException(
+          `Invalid weight for answer option '${dtoQao.content}': its weight (${dtoQao.weight}) must not exceed the weight of its parent question '${questionEntity.question_lookup.content}' (${questionEntity.weight}). Please ensure answer option weights are less than or equal to their parent question's weight.`
+        );
+      }
       let qaoEntity: QuestionAnswerOp;
       const existingQao = existingQaoMap.get(dtoQao.content);
 
@@ -864,7 +891,7 @@ export class GroupQuestionService {
         throw new NotFoundException(`Group question with ID "${id}" not found.`);
       }
 
-      if (gQue.status != groupQuestionStatus.DRAFT){
+      if (gQue.status != groupQuestionStatus.DRAFT) {
         throw new BadRequestException(
           `Group question with ID "${id}" cannot be deleted because its status is "${gQue.status}". Only group questions in DRAFT status can be deleted.`
         );
