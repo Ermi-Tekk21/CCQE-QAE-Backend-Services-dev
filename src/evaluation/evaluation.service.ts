@@ -32,6 +32,14 @@ export class EvaluationService {
 
   private async validateEvalCreation(groupQuestion: GroupQuestion, createEvaluationDto: CreateEvaluationDto | UpdateEvaluationDto) {
     if (createEvaluationDto instanceof CreateEvaluationDto) {
+      //validate current date and group question ends@date
+      const current_time = new Date()
+      if (new Date(groupQuestion.evaluation_ends_at) < current_time){
+        console.error('evaluation end\'s at time passed.please communicate to the admin');
+        throw new BadRequestException(`The evaluation deadline for "${groupQuestion.name}" has already passed. The deadline was ${groupQuestion.evaluation_ends_at}. Please contact the administrator for further assistance.`)
+      }
+
+
       // validate the dto
       const { audios } = createEvaluationDto;
       const quesUnderGroupQue: string[] = groupQuestion.question.map(ques => ques.id)
@@ -105,16 +113,16 @@ export class EvaluationService {
         createdAudioEvaluation.updated_at = null
         await entityManager.save(EvalPerAudio, createdAudioEvaluation)
       }
-      createdAgentEvaluation.result = agentResult / audios.length
-      createdAgentEvaluation.updated_at = null
-      entityManager.save(AgentEvaluation, createdAgentEvaluation)
+      createdAgentEvaluation.result = agentResult / audios.length;
+      createdAgentEvaluation.updated_at = null;
+      entityManager.save(AgentEvaluation, createdAgentEvaluation);
       await entityManager.queryRunner?.commitTransaction()
 
       // produce kafka for each audio to update audio status at audio service
       for (const audio of audios) {
         const message = {
           audio_id: audio.audio_id,
-          status: audioStatus.OPEN
+          status: audioStatus.OPENED
         }
         const { message: kafkaMessage } = this.UpdateAudioStatus(message)
         console.log(kafkaMessage);
@@ -122,8 +130,8 @@ export class EvaluationService {
 
       return {
         success: true,
-        message: "Evaluation is successfully created.",
-        "evaluation": createdAgentEvaluation
+        message: `Evaluation for assignment ID ${agent_assignment_id} under group question "${groupQuestion.name}" has been successfully created.`,
+        evaluation: createdAgentEvaluation
       }
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -397,11 +405,11 @@ export class EvaluationService {
 
       const audioEvaluations: EvalPerAudio[] = evaluation.eval_per_audio
       for (const audioEvaluation of audioEvaluations) {
-        if (audioEvaluation.appeal && (audioEvaluation.appeal.status == appealStatus.UNDER_REVIEW || audioEvaluation.appeal.status == appealStatus.DRAFT)) {
+        if (audioEvaluation.appeal && (audioEvaluation.appeal.status != appealStatus.CLOSED)) {
           throw new BadRequestException(`apeal up on audio with ${audioEvaluation.audio_id} should be closed before closing agent evaluation.`)
         }
       }
-      evaluation.status = agentEvalStatus.COMPLETED
+      evaluation.status = agentEvalStatus.CLOSED
 
       await this.agentEvaluationRepo.save(evaluation)
 
@@ -410,7 +418,7 @@ export class EvaluationService {
       for (const audioId of audioIds) {
         const message = {
           audio_id: audioId,
-          status: audioStatus.COMPLETED
+          status: audioStatus.CLOSED
         }
         const { message: kafkaMessage } = this.UpdateAudioStatus(message)
         console.log(kafkaMessage);
@@ -432,7 +440,7 @@ export class EvaluationService {
     }
   }
 
-  //agent evaluation id
+  //agent evaluation id // to be deleted unnessary
   async updateEvalStatus(id: string) {
     const evaluation = await this.agentEvaluationRepo.findOne({
       where: { id },
@@ -446,10 +454,7 @@ export class EvaluationService {
       (appeal && appeal.status == appealStatus.UNDER_REVIEW) ||
       (appeal && appeal.status != appealStatus.DRAFT)
     )) {
-      evaluation.status = agentEvalStatus.UNDER_REVIEW
-      await this.agentEvaluationRepo.save(evaluation)
-    } else {
-      evaluation.status = agentEvalStatus.DRAFT
+      evaluation.status = agentEvalStatus.OPENED
       await this.agentEvaluationRepo.save(evaluation)
     }
     return {

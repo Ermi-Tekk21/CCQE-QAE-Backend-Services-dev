@@ -12,7 +12,7 @@
  *   This status indicates the end of the evaluation process for the group question.
  */
 export enum groupQuestionStatus {
-    DRAFT = 'DRAFT',
-    PUBLISHED = 'PUBLISHED',
-    CLOSED = 'CLOSED',
+    DRAFT = 'draft',
+    PUBLISHED = 'published',
+    CLOSED = 'closed',
 }

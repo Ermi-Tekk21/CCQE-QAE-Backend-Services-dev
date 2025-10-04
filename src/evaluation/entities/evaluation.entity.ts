@@ -8,7 +8,7 @@ export class AgentEvaluation {
     @PrimaryGeneratedColumn("uuid")
     id: string
 
-    @Column({ type: "uuid" , unique: true})
+    @Column({ type: "uuid", unique: true })
     agent_assignment_id: string
 
     @Column({ type: "float", nullable: true })
@@ -17,7 +17,7 @@ export class AgentEvaluation {
     @Column({
         type: 'enum',
         enum: agentEvalStatus,
-        default: agentEvalStatus.DRAFT
+        default: agentEvalStatus.OPENED,
     })
     status: agentEvalStatus
 
