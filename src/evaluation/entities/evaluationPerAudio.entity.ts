@@ -14,6 +14,9 @@ export class EvalPerAudio {
     @Column({ type: "float", nullable: true })
     result: number
 
+    @Column({ type: "text", nullable: true })
+    feedback: string;
+
     @Column({ default: false })
     is_deleted: boolean
 

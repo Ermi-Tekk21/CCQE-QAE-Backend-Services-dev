@@ -34,7 +34,7 @@ export class EvaluationService {
     if (createEvaluationDto instanceof CreateEvaluationDto) {
       //validate current date and group question ends@date
       const current_time = new Date()
-      if (new Date(groupQuestion.evaluation_ends_at) < current_time){
+      if (new Date(groupQuestion.evaluation_ends_at) < current_time) {
         console.error('evaluation end\'s at time passed.please communicate to the admin');
         throw new BadRequestException(`The evaluation deadline for "${groupQuestion.name}" has already passed. The deadline was ${groupQuestion.evaluation_ends_at}. Please contact the administrator for further assistance.`)
       }
@@ -80,6 +80,7 @@ export class EvaluationService {
         const createdAudioEvaluation = new EvalPerAudio()
         createdAudioEvaluation.agent_evaluation = createdAgentEvaluation
         createdAudioEvaluation.audio_id = audio.audio_id;
+        createdAudioEvaluation.feedback = audio.feedback
         const questions = audio.questions
         await entityManager.save(EvalPerAudio, createdAudioEvaluation)
 
