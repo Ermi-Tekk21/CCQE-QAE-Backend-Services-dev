@@ -1096,11 +1096,11 @@ export class GroupQuestionService {
 
     if (groupQuestionDetails.agent_evaluation.some(
       agentEval => {
-        const notCompleted = agentEval.status != agentEvalStatus.COMPLETED;
-        if (notCompleted) {
+        const notClosed = agentEval.status != agentEvalStatus.CLOSED;
+        if (notClosed) {
           console.log("not completed eval: ", agentEval);
         }
-        return notCompleted;
+        return notClosed;
       }
     )) {
       throw new BadRequestException('Cannot close the group question because one or more agent evaluations are still in progress or not completed. Please ensure all agent evaluations are marked as completed before closing.')
@@ -1111,7 +1111,7 @@ export class GroupQuestionService {
     await this.groupQuestionRepo.save(activeGroupQuestion)
     return {
       success: true,
-      message: `group question ${activeGroupQuestion.name}  is successfully closed`
+      message: `Group question "${activeGroupQuestion.name}" has been successfully closed. All agent evaluations are completed and the evaluation period has ended.`
     }
   }
 }
