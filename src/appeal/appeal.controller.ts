@@ -8,9 +8,10 @@ import { PaginationDto } from 'src/common/dto/pagination.dto';
 export class AppealController {
   constructor(private readonly appealService: AppealService) { }
 
-  @Post()
-  create(@Body() createAppealDto: CreateAppealDto) {
-    return this.appealService.create(createAppealDto);
+  //agent evaluation
+  @Post(':id')
+  create(@Body() createAppealDto: CreateAppealDto, @Param('id') id: string) {
+    return this.appealService.create(id, createAppealDto);
   }
 
   @Get()
@@ -25,47 +26,47 @@ export class AppealController {
     return this.appealService.findOne(id);
   }
 
-  @Get('agent/:id')
+  @Get('agent-evaluation/:id')
   findAppealsUnderSpecAgent(
     @Param('id') id: string,
     @Query() pagination: PaginationDto) {
-    const { page, limit, sort_order } = pagination;
-
-    return this.appealService.findAppealsPerAgentId(id, page, limit, sort_order as 'ASC' | 'DESC');
+    const { sort_order } = pagination;
+    return this.appealService.findAppealsPerAgentEvaluationId(id, sort_order as 'ASC' | 'DESC');
   }
 
-  @Put(':id')
+  @Put('agent-evaluation/:id')
   update(@Param('id') id: string, @Body() updateAppealDto: UpdateAppealDto) {
     return this.appealService.update(id, updateAppealDto);
   }
 
+  //appealid
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.appealService.remove(id);
   }
 
-  @Delete('agent/:id')
+  @Delete('agent-evaluation/:id')
   removeAppealsPerAgent(@Param('id') id: string) {
     return this.appealService.removeAllApealsUnderAgent(id);
   }
 
   @Patch('under-review/:id')
   underReview(@Param('id') id: string) {
-    return this.appealService.underReview(id)
+    return "this.appealService.underReview(id)"
   }
 
   @Patch('close/:id')
   close(@Param('id') id: string) {
-    return this.appealService.close(id)
+    return "this.appealService.close(id)"
   }
 
   @Patch('draft/:id')
   returnToDraft(@Param('id') id: string) {
-    return this.appealService.returnToDraft(id)
+    return "this.appealService.returnToDraft(id)"
   }
 
   @Patch('close-and-decline/:id')
   decline(@Param('id') id: string) {
-    return this.appealService.decline(id)
+    return "this.appealService.decline(id)"
   }
 }

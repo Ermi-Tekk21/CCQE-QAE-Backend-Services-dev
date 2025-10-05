@@ -2,6 +2,7 @@ import { agentEvalStatus } from "src/common/agent_evaluation.status";
 import { GroupQuestion } from "src/group-question/entities/group-question-entities/group-question.entity";
 import { Column, CreateDateColumn, DeleteDateColumn, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { EvalPerAudio } from "./evaluationPerAudio.entity";
+import { AppealComplain } from "src/appeal/entities/appealComplain.entity";
 
 @Entity("agent_evaluation")
 export class AgentEvaluation {
@@ -49,5 +50,8 @@ export class AgentEvaluation {
         cascade: true
     })
     eval_per_audio: EvalPerAudio[]
+
+    @ManyToOne(() => AppealComplain, (appealComplain) => appealComplain.id, { nullable: true })
+    complain: AppealComplain | null
 
 }

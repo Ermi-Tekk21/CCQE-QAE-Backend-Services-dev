@@ -1,0 +1,15 @@
+import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from "typeorm";
+import { AgentEvaluation } from "src/evaluation/entities/evaluation.entity";
+
+@Entity("appeal-complain")
+export class AppealComplain {
+    @PrimaryGeneratedColumn("uuid")
+    id: string
+
+    @Column({ type: "text", unique: true })
+    complain: string
+
+    // Relationship
+    @OneToMany(() => AgentEvaluation, (agentEval) => agentEval.complain)
+    agent_evaluation: AgentEvaluation[]
+}
