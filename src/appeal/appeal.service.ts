@@ -31,7 +31,7 @@ export class AppealService {
         }, relations: ['eval_per_audio', 'eval_per_audio.appeal']
       })
       if (!agentEvaluation) {
-        throw new BadRequestException('not found')
+        throw new BadRequestException(`Agent evaluation with id ${id} not found. Unable to create appeal.`);
       }
 
       const newComplain: AppealComplain = entityManager.create(AppealComplain, {
@@ -46,10 +46,13 @@ export class AppealService {
         const audioEvaluation = await entityManager.findOne(EvalPerAudio, {
           where: {
             id: audioEvalId
-          }, relations: ['appeal']
+          }, relations: ['appeal', 'agent_evaluation']
         })
         if (!audioEvaluation) {
           throw new BadRequestException(`audio evaluation with id ${audioEvalId} not found under agent valuation with id ${id}`)
+        }
+        if (audioEvaluation.agent_evaluation.id !== agentEvaluation.id) {
+          throw new BadRequestException(`Audio evaluation with id ${audioEvalId} does not belong to agent evaluation with id ${id}.`)
         }
         const newAppeal = entityManager.create(Appeal, {
           evaluation_per_audio: audioEvaluation
@@ -93,6 +96,28 @@ export class AppealService {
     try {
       const paginatedAppeals = await paginate(this.appealRepo, page, limit,
         {
+          order: { created_at: sortOrder },
+          relations: ['evaluation_per_audio']
+        }
+      )
+      return {
+        success: true,
+        appeals: paginatedAppeals.data,
+        meta: paginatedAppeals.meta
+      }
+    } catch (error) {
+      console.error(error);
+      throw new InternalServerErrorException("error occured during fetching appeals");
+    }
+  }
+
+  async findAllDraftedAppeal(page: number, limit: number, sortOrder: 'ASC' | 'DESC' = 'DESC') {
+    try {
+      const paginatedAppeals = await paginate(this.appealRepo, page, limit,
+        {
+          where: {
+            status: appealStatus.DRAFT
+          },
           order: { created_at: sortOrder },
           relations: ['evaluation_per_audio']
         }

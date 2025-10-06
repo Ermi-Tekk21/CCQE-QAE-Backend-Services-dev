@@ -73,7 +73,7 @@ export class EvaluationService {
       const createdAgentEvaluation = new AgentEvaluation()
       createdAgentEvaluation.agent_assignment_id = agent_assignment_id
       createdAgentEvaluation.group_question = groupQuestion
-      entityManager.save(AgentEvaluation, createdAgentEvaluation)
+      await entityManager.save(AgentEvaluation, createdAgentEvaluation)
 
       let agentResult = 0
 
@@ -118,7 +118,7 @@ export class EvaluationService {
       }
       createdAgentEvaluation.result = agentResult / audios.length;
       createdAgentEvaluation.updated_at = null;
-      entityManager.save(AgentEvaluation, createdAgentEvaluation);
+      await entityManager.save(AgentEvaluation, createdAgentEvaluation);
       await entityManager.queryRunner?.commitTransaction()
 
       // produce kafka for each audio to update audio status at audio service
@@ -147,8 +147,14 @@ export class EvaluationService {
       }
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      console.error(error);
-      throw error;
+      console.error('Error creating evaluation:', error.code);
+      if (error.code == '23505') {
+        throw new BadRequestException('An evaluation for this assignment already exists.');
+      }
+      if (error instanceof NotFoundException || error instanceof BadRequestException || error instanceof NotAcceptableException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('An unexpected error occurred while creating the evaluation.');
     } finally {
       await queryRunner.release();
     }
@@ -171,8 +177,8 @@ export class EvaluationService {
         meta: paginatedEvaluations.meta
       }
     } catch (error) {
-      console.error(error);
-      throw new InternalServerErrorException("internal server error occured during finding all existed evalautions")
+      console.error('Error finding all evaluations:', error);
+      throw new InternalServerErrorException("An internal server error occurred while fetching evaluations.");
     }
   }
 
@@ -194,14 +200,13 @@ export class EvaluationService {
         evaluation: res
       }
     } catch (error) {
-      console.error(error);
+      console.error(`Error finding evaluation with ID ${id}:`, error);
       if (error instanceof NotFoundException) {
-        throw error
-      } else {
-        throw new InternalServerErrorException('internal error occured during finding this evaluation')
+        throw error;
       }
+      throw new InternalServerErrorException('An internal server error occurred while finding the evaluation.');
     } finally {
-      queryRunner.release()
+      await queryRunner.release();
     }
   }
 
@@ -223,14 +228,13 @@ export class EvaluationService {
         evaluation: evaluation
       }
     } catch (error) {
-      console.error(error);
+      console.error(`Error finding evaluation with assignment ID ${id}:`, error);
       if (error instanceof NotFoundException) {
-        throw error
-      } else {
-        throw new InternalServerErrorException('internal error occured during finding this evaluation')
+        throw error;
       }
+      throw new InternalServerErrorException('An internal server error occurred while finding the evaluation.');
     } finally {
-      queryRunner.release()
+      await queryRunner.release();
     }
   }
 
@@ -298,10 +302,13 @@ export class EvaluationService {
       }
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      console.error(error)
-      throw error
+      console.error(`Error updating evaluation with ID ${id}:`, error);
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('An unexpected error occurred while updating the evaluation.');
     } finally {
-      queryRunner.release();
+      await queryRunner.release();
     }
   }
 
@@ -335,13 +342,11 @@ export class EvaluationService {
       }
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      console.error(error);
-
+      console.error(`Error removing evaluation with ID ${id}:`, error);
       if (error instanceof NotFoundException) {
         throw error;
-      } else {
-        throw new InternalServerErrorException('internal error occured during permanentlly removing/deleting this evaluation')
       }
+      throw new InternalServerErrorException('An internal server error occurred while removing the evaluation.');
     } finally {
       await queryRunner.release();
     }
@@ -356,7 +361,6 @@ export class EvaluationService {
         throw new BadRequestException(`agent evaluation with ${id} is already soft deleted`)
       }
 
-
       await this.agentEvaluationRepo.softDelete(id);
       agentEvaluation.deleted_at = new Date()
       agentEvaluation.is_deleted = true
@@ -367,13 +371,11 @@ export class EvaluationService {
         "temp deleted eval": agentEvaluation
       }
     } catch (error) {
-      console.error(error);
-
+      console.error(`Error soft-deleting evaluation with ID ${id}:`, error);
       if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error;
-      } else {
-        throw new InternalServerErrorException('internal error occured during soft deleting this evaluation')
       }
+      throw new InternalServerErrorException('An internal server error occurred while soft-deleting the evaluation.');
     }
   }
 
@@ -391,7 +393,6 @@ export class EvaluationService {
         throw new BadRequestException(`agent evaluation with ${id} is already not soft deleted`)
       }
 
-
       await entityManager.softDelete(AgentEvaluation, { id: id });
       agentEvaluation.is_deleted = false
       agentEvaluation.deleted_at = null
@@ -405,13 +406,11 @@ export class EvaluationService {
       }
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      console.error(error);
-
+      console.error(`Error restoring evaluation with ID ${id}:`, error);
       if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error;
-      } else {
-        throw new InternalServerErrorException('internal error occured during restoring this evaluation')
       }
+      throw new InternalServerErrorException('An internal server error occurred while restoring the evaluation.');
     } finally {
       await queryRunner.release();
     }
@@ -456,13 +455,11 @@ export class EvaluationService {
         evaluation,
       }
     } catch (error) {
+      console.error(`Error closing evaluation with ID ${id}:`, error);
       if (error instanceof BadRequestException || error instanceof NotFoundException) {
-        throw error
-      } else {
-        console.error(error);
-        throw new InternalServerErrorException("error occured during clossing this evaluation.")
+        throw error;
       }
-
+      throw new InternalServerErrorException('An error occurred while closing the evaluation.');
     }
   }
 

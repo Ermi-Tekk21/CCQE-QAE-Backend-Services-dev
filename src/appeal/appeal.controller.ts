@@ -11,7 +11,7 @@ export class AppealController {
   ) { }
 
   //agent evaluation
-  @Post(':id')
+  @Post('agent-evaluation/:id')
   create(@Body() createAppealDto: CreateAppealDto, @Param('id') id: string) {
     return this.appealService.create(id, createAppealDto);
   }
@@ -21,6 +21,13 @@ export class AppealController {
     const { page, limit, sort_order } = pagination;
 
     return this.appealService.findAll(page, limit, sort_order as 'ASC' | 'DESC');
+  }
+
+  @Get('all-drafted')
+  findAllDraftedAppeal(@Query() pagination: PaginationDto) {
+    const { page, limit, sort_order } = pagination;
+
+    return this.appealService.findAllDraftedAppeal(page, limit, sort_order as 'ASC' | 'DESC');
   }
 
   @Get(':id')
