@@ -1,4 +1,4 @@
 export enum audioStatus {
-    OPEN = 'OPEN',
-    COMPLETED = 'COMPLETED',
+    OPENED = 'opened',
+    CLOSED = 'closed',
 }

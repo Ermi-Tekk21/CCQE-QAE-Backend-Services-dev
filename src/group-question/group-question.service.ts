@@ -13,6 +13,9 @@ import { CreateGroupQuestionDto } from './dto/group-question-dto/create-group-qu
 import { DeletQueOrAnsOpDto } from './dto/del-que-or-ansop-dto/delet-queOrAnsOp.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { paginate } from 'src/common/utils/paginate';
+import { agentEvalStatus } from 'src/common/agent_evaluation.status';
+import { CreateQuestionAnswerOPDto } from './dto/question-and-answer-option-dto/create-question_answerOP.dto';
+import { CreateQuestionDto } from './dto/question-dto/create-question.dto';
 
 @Injectable()
 export class GroupQuestionService {
@@ -32,17 +35,31 @@ export class GroupQuestionService {
       where: { is_active: true, is_deleted: false },
     });
     if (doesActiveExist) {
-      throw new HttpException(
-        "You can't create a new group question before the active one is completed.",
-        HttpStatus.BAD_REQUEST,
-      );
+      // check for end date, if current date exceedes the active group question endsat date, close it
+      const currentDate = new Date();
+      if (currentDate < new Date(doesActiveExist.evaluation_ends_at)) {
+        throw new HttpException(
+          `You can't create a new group question before the active one is completed. The current active group question "${doesActiveExist.name}" is still ongoing and its evaluation period ends at ${doesActiveExist.evaluation_ends_at}. Please wait until it is closed before creating a new one.`,
+          HttpStatus.BAD_REQUEST,
+        );
+      } else {
+        await this.close()
+      }
     }
 
     // 2. Check for an existing GroupQuestion for the current month.
     const currentDate = new Date();
+    currentDate.setMonth(currentDate.getMonth() - 1);
     const month = currentDate.toLocaleString('en-US', { month: 'short' });
     const year = currentDate.getFullYear().toString();
     const groupQuestionName = `${month}/${year}/EP`;
+
+    const dayDifference = (createGroupQuestionDto.evaluation_ends_at.getDate() - currentDate.getDate());
+    if (dayDifference > 10) {
+      throw new BadRequestException(
+        `Invalid evaluation end date: the difference between today's date (${currentDate.toDateString()}) and the evaluation end date (${createGroupQuestionDto.evaluation_ends_at.toDateString()}) is ${dayDifference} days, which exceeds the allowed maximum of 10 days. Please ensure the evaluation period does not exceed 10 days from the current date.`
+      );
+    }
 
     const doesOtherExistWithnThisMonth = await entityManager.findOne(GroupQuestion, {
       where: { name: groupQuestionName, is_deleted: false },
@@ -76,6 +93,7 @@ export class GroupQuestionService {
     // Create the GroupQuestion entity instance in memory.
     const createdByUserId = createGroupQuestionDto.created_by;
     const currentDate = new Date();
+    currentDate.setMonth(currentDate.getMonth() - 1);
     const month = currentDate.toLocaleString('en-US', { month: 'short' });
     const year = currentDate.getFullYear().toString();
     const groupQuestionName = `${month}/${year}/EP`;
@@ -209,7 +227,6 @@ export class GroupQuestionService {
 
     const removed = this.findRemovedQuestions(parentQuestionMap, currentQuestionMap);
     const { added, modified } = this.findAddedAndModifiedQuestions(parentQuestionMap, currentQuestions);
-
     return { added, removed, modified };
   }
 
@@ -271,6 +288,7 @@ export class GroupQuestionService {
     const changes = this.compareQuestionsAndGenerateChanges(parent.question, questions);
 
     const currentDate = new Date();
+    currentDate.setMonth(currentDate.getMonth() - 1);
     const month = currentDate.toLocaleString('en-US', { month: 'short' });
     const year = currentDate.getFullYear().toString();
 
@@ -285,6 +303,14 @@ export class GroupQuestionService {
     await entityManager.save(GroupQuestion, savedGroupQuestion);
   }
 
+  private validateQuestionAnsOP(ansOpData: CreateQuestionAnswerOPDto, question: CreateQuestionDto) {
+    if (ansOpData.weight > question.weight) {
+      throw new BadRequestException(
+        `Invalid weight for answer option '${ansOpData.content}': its weight (${ansOpData.weight}) must not exceed the weight of its parent question '${question.content}' (${question.weight}). Please ensure answer option weights are less than or equal to their parent question's weight.`
+      );
+    }
+  }
+
   private async processNestedQuestions(
     entityManager: EntityManager,
     savedGroupQuestion: GroupQuestion,
@@ -292,6 +318,14 @@ export class GroupQuestionService {
   ): Promise<void> {
     if (!questionsDto || questionsDto.length === 0) {
       return; // No questions to process
+    }
+
+    const sumOfQuestionWeights = questionsDto.reduce((sum, question) => sum + question.weight, 0);
+    if (sumOfQuestionWeights > 100) {
+      console.error('group question exceedes 100; ', sumOfQuestionWeights);
+      throw new BadRequestException(
+        `Invalid total weight for group question: the sum of all question weights is ${sumOfQuestionWeights}, which exceeds the allowed maximum of 100. Please adjust the weights so that the total does not surpass 100 before creating the group question.`
+      );
     }
 
     for (const queData of questionsDto) {
@@ -323,6 +357,7 @@ export class GroupQuestionService {
       // Process and save nested Answer Options
       const createdQAO: QuestionAnswerOp[] = [];
       for (const ansData of queData.question_answer_option) {
+        this.validateQuestionAnsOP(ansData, queData)
         let answerOption = await entityManager.findOne(AnswerOptionLookup, { where: { content: ansData.content } });
         if (!answerOption) {
           answerOption = entityManager.create(AnswerOptionLookup, { content: ansData.content, created_by: queData.created_by, is_deleted: false });
@@ -462,8 +497,17 @@ export class GroupQuestionService {
     const questionsToSave: Question[] = [];
     console.log(questionsToSave);
 
+    const sumOfQuestionWeights = updatedQuestionsDto.reduce((sum, question) => sum + question.weight, 0);
+    if (sumOfQuestionWeights > 100) {
+      console.error('group question exceedes 100; ', sumOfQuestionWeights);
+      throw new BadRequestException(
+        `Invalid total weight for group question: the sum of all question weights is ${sumOfQuestionWeights}, which exceeds the allowed maximum of 100. Please adjust the weights so that the total does not surpass 100 before creating the group question.`
+      );
+    }
+
     // First pass: Process updates and new creations
     for (const dtoQ of updatedQuestionsDto) {
+
       let questionEntity: Question;
 
       if (dtoQ.id) {
@@ -494,10 +538,6 @@ export class GroupQuestionService {
         q => !questionsToDelete.some(deletedQ => deletedQ.id === q.id)
       );
     }
-
-    // Save all changes at once for efficiency (if applicable)
-    // Note: The original code saved within the loop. This can be optimized, but let's stick to the core refactoring first.
-    // We'll leave the saves inside the helper methods to match the original logic.
   }
 
   private async updateExistingQuestion(
@@ -586,6 +626,11 @@ export class GroupQuestionService {
     const qaosToSave: QuestionAnswerOp[] = [];
 
     for (const dtoQao of updatedQaoDto) {
+      if (dtoQao.weight > questionEntity.weight) {
+        throw new BadRequestException(
+          `Invalid weight for answer option '${dtoQao.content}': its weight (${dtoQao.weight}) must not exceed the weight of its parent question '${questionEntity.question_lookup.content}' (${questionEntity.weight}). Please ensure answer option weights are less than or equal to their parent question's weight.`
+        );
+      }
       let qaoEntity: QuestionAnswerOp;
       const existingQao = existingQaoMap.get(dtoQao.content);
 
@@ -627,7 +672,6 @@ export class GroupQuestionService {
     return qaosToSave;
   }
 
-
   async update(id: string, updateGroupQuestionDto: UpdateGroupQuestionDto): Promise<{
     success: boolean,
     message: string,
@@ -648,6 +692,9 @@ export class GroupQuestionService {
         throw new NotFoundException(`Group question with ID "${id}" not found.`);
       }
 
+      if (groupQuestion.status == groupQuestionStatus.CLOSED || groupQuestion.status == groupQuestionStatus.PUBLISHED) {
+        throw new BadRequestException('You cannot update a group question that is already published or closed. Only draft group questions can be updated.')
+      }
       // Apply top-level updates to the GroupQuestion entity
       entityManager.merge(GroupQuestion, groupQuestion, updateGroupQuestionDto);
       groupQuestion.updated_at = new Date();
@@ -745,27 +792,29 @@ export class GroupQuestionService {
     }
   }
 
-  async undoPublish(id: string) {
+  async undoPublish() {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
     const entityManager = queryRunner.manager;
 
     try {
-      const gQue = await entityManager.findOne(GroupQuestion, { where: { id } });
+      const { groupQuestion: gQue } = await this.getActiveGroupQuestion()
 
-      if (!gQue) {
-        throw new NotFoundException(`Group question with ID "${id}" not found.`);
-      }
+      const group_question = await entityManager.findOne(GroupQuestion, {
+        where: {
+          id: gQue.id
+        },
+        relations: ['agent_evaluation']
+      })
 
-      if (gQue.is_active) {
-        gQue.is_active = false
-        gQue.status = groupQuestionStatus.DRAFT
-        await entityManager.save(GroupQuestion, gQue);
-        await queryRunner.commitTransaction();
-      } else {
-        throw new HttpException("already un published group question", HttpStatus.BAD_REQUEST)
+      if (group_question?.agent_evaluation || group_question?.agent_evaluation.length != null) {
+        throw new BadRequestException('you can not undo publish since evaluation associated with this graoup question has started.')
       }
+      gQue.is_active = false
+      gQue.status = groupQuestionStatus.DRAFT
+      await entityManager.save(GroupQuestion, gQue);
+      await queryRunner.commitTransaction();
 
       return { message: `Group question "${gQue.name}" status changed to draft successfully.`, group_question: gQue };
     } catch (error) {
@@ -852,6 +901,11 @@ export class GroupQuestionService {
         throw new NotFoundException(`Group question with ID "${id}" not found.`);
       }
 
+      if (gQue.status != groupQuestionStatus.DRAFT) {
+        throw new BadRequestException(
+          `Group question with ID "${id}" cannot be deleted because its status is "${gQue.status}". Only group questions in DRAFT status can be deleted.`
+        );
+      }
 
       await entityManager.softDelete(GroupQuestion, { id: gQue.id });
       gQue.deleted_at = new Date
@@ -867,7 +921,7 @@ export class GroupQuestionService {
       }
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      if (error instanceof NotFoundException || error instanceof HttpException) {
+      if (error instanceof NotFoundException || error instanceof HttpException || error instanceof BadRequestException) {
         throw error;
       } else {
         throw new HttpException(
@@ -1016,6 +1070,48 @@ export class GroupQuestionService {
     }
     return {
       groupQuestion
+    }
+  }
+
+  async close() {
+    const { groupQuestion: activeGroupQuestion } = await this.getActiveGroupQuestion()
+    const currentDate = new Date();
+
+    if (currentDate < new Date(activeGroupQuestion.evaluation_ends_at)) {
+      console.log("current date: ", currentDate);
+      console.log("eval end date: ", new Date(activeGroupQuestion.evaluation_ends_at));
+      throw new BadRequestException('You cannot close the group question before the evaluation period ends.');
+    }
+
+    const groupQuestionDetails = await this.groupQuestionRepo.findOne({
+      where: {
+        id: activeGroupQuestion.id
+      },
+      relations: ['agent_evaluation'],
+    })
+
+    if (!groupQuestionDetails?.agent_evaluation) {
+      throw new BadRequestException('Cannot close the group question because no agent evaluation has been started for this group question.')
+    }
+
+    if (groupQuestionDetails.agent_evaluation.some(
+      agentEval => {
+        const notClosed = agentEval.status != agentEvalStatus.CLOSED;
+        if (notClosed) {
+          console.log("not completed eval: ", agentEval);
+        }
+        return notClosed;
+      }
+    )) {
+      throw new BadRequestException('Cannot close the group question because one or more agent evaluations are still in progress or not completed. Please ensure all agent evaluations are marked as completed before closing.')
+    }
+
+    activeGroupQuestion.is_active = false;
+    activeGroupQuestion.status = groupQuestionStatus.CLOSED
+    await this.groupQuestionRepo.save(activeGroupQuestion)
+    return {
+      success: true,
+      message: `Group question "${activeGroupQuestion.name}" has been successfully closed. All agent evaluations are completed and the evaluation period has ended.`
     }
   }
 }

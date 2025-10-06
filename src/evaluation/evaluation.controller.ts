@@ -47,7 +47,7 @@ export class EvaluationController {
   }
 
   @Patch('close/:id')
-  agentUnderReview(@Param('id') id: string) {
+  closeAgentEvaluation(@Param('id') id: string) {
     return this.evaluationService.close(id);
   }
 }

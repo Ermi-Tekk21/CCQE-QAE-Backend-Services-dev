@@ -15,6 +15,7 @@ import { GroupQuestionService } from 'src/group-question/group-question.service'
 import { paginate } from 'src/common/utils/paginate';
 import { ClientKafka } from '@nestjs/microservices';
 import { audioStatus } from 'src/common/audio.status';
+import { AppealService } from 'src/appeal/appeal.service';
 
 @Injectable()
 export class EvaluationService {
@@ -27,11 +28,20 @@ export class EvaluationService {
     private readonly kafkaClient: ClientKafka,
 
     private readonly groupQuestionService: GroupQuestionService,
+    private readonly appealService: AppealService,
     private readonly dataSource: DataSource,
   ) { }
 
   private async validateEvalCreation(groupQuestion: GroupQuestion, createEvaluationDto: CreateEvaluationDto | UpdateEvaluationDto) {
     if (createEvaluationDto instanceof CreateEvaluationDto) {
+      //validate current date and group question ends@date
+      const current_time = new Date()
+      if (new Date(groupQuestion.evaluation_ends_at) < current_time) {
+        console.error('evaluation end\'s at time passed.please communicate to the admin');
+        throw new BadRequestException(`The evaluation deadline for "${groupQuestion.name}" has already passed. The deadline was ${groupQuestion.evaluation_ends_at}. Please contact the administrator for further assistance.`)
+      }
+
+
       // validate the dto
       const { audios } = createEvaluationDto;
       const quesUnderGroupQue: string[] = groupQuestion.question.map(ques => ques.id)
@@ -72,6 +82,7 @@ export class EvaluationService {
         const createdAudioEvaluation = new EvalPerAudio()
         createdAudioEvaluation.agent_evaluation = createdAgentEvaluation
         createdAudioEvaluation.audio_id = audio.audio_id;
+        createdAudioEvaluation.feedback = audio.feedback
         const questions = audio.questions
         await entityManager.save(EvalPerAudio, createdAudioEvaluation)
 
@@ -105,16 +116,16 @@ export class EvaluationService {
         createdAudioEvaluation.updated_at = null
         await entityManager.save(EvalPerAudio, createdAudioEvaluation)
       }
-      createdAgentEvaluation.result = agentResult / audios.length
-      createdAgentEvaluation.updated_at = null
-      entityManager.save(AgentEvaluation, createdAgentEvaluation)
+      createdAgentEvaluation.result = agentResult / audios.length;
+      createdAgentEvaluation.updated_at = null;
+      entityManager.save(AgentEvaluation, createdAgentEvaluation);
       await entityManager.queryRunner?.commitTransaction()
 
       // produce kafka for each audio to update audio status at audio service
       for (const audio of audios) {
         const message = {
           audio_id: audio.audio_id,
-          status: audioStatus.OPEN
+          status: audioStatus.OPENED
         }
         const { message: audioKafkaMessage } = this.UpdateAudioStatus(message)
         console.log(audioKafkaMessage);
@@ -131,8 +142,8 @@ export class EvaluationService {
 
       return {
         success: true,
-        message: "Evaluation is successfully created.",
-        "evaluation": createdAgentEvaluation
+        message: `Evaluation for assignment ID ${agent_assignment_id} under group question "${groupQuestion.name}" has been successfully created.`,
+        evaluation: createdAgentEvaluation
       }
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -238,7 +249,10 @@ export class EvaluationService {
       let newAgentResult = 0
       for (const updateAudioEvaluationDto of updateEvaluationDto.audios) {
         // check existance of evaluation per audio here
-        const evalPerAudio = await entityManager.findOne(EvalPerAudio, { where: { id: updateAudioEvaluationDto.audio_evaluation_id } })
+        const evalPerAudio = await entityManager.findOne(EvalPerAudio, {
+          where: { id: updateAudioEvaluationDto.audio_evaluation_id },
+          relations: ['appeal']
+        })
         if (!evalPerAudio) {
           throw new NotFoundException(`evaluation per audio with ${updateAudioEvaluationDto.audio_evaluation_id} not found`)
         }
@@ -269,6 +283,7 @@ export class EvaluationService {
           await entityManager.save(EvalPerQuestion, evalPerQue)
         }
         evalPerAudio.result = newAudioResult
+        await this.closeAppeal(evalPerAudio, newAudioResult)
         await entityManager.save(EvalPerAudio, evalPerAudio)
         newAgentResult += evalPerAudio.result
       }
@@ -287,6 +302,16 @@ export class EvaluationService {
       throw error
     } finally {
       queryRunner.release();
+    }
+  }
+
+  async closeAppeal(evalPerAudio: EvalPerAudio, newAudioResult: number) {
+    if (evalPerAudio.appeal != null) {
+      const changes = {
+        from: evalPerAudio.result,
+        to: newAudioResult
+      }
+      await this.appealService.closeAppeal(evalPerAudio.id, changes)
     }
   }
 
@@ -406,11 +431,11 @@ export class EvaluationService {
 
       const audioEvaluations: EvalPerAudio[] = evaluation.eval_per_audio
       for (const audioEvaluation of audioEvaluations) {
-        if (audioEvaluation.appeal && (audioEvaluation.appeal.status == appealStatus.UNDER_REVIEW || audioEvaluation.appeal.status == appealStatus.DRAFT)) {
+        if (audioEvaluation.appeal && (audioEvaluation.appeal.status != appealStatus.CLOSED)) {
           throw new BadRequestException(`apeal up on audio with ${audioEvaluation.audio_id} should be closed before closing agent evaluation.`)
         }
       }
-      evaluation.status = agentEvalStatus.COMPLETED
+      evaluation.status = agentEvalStatus.CLOSED
 
       await this.agentEvaluationRepo.save(evaluation)
 
@@ -419,7 +444,7 @@ export class EvaluationService {
       for (const audioId of audioIds) {
         const message = {
           audio_id: audioId,
-          status: audioStatus.COMPLETED
+          status: audioStatus.CLOSED
         }
         const { message: kafkaMessage } = this.UpdateAudioStatus(message)
         console.log(kafkaMessage);
@@ -438,31 +463,6 @@ export class EvaluationService {
         throw new InternalServerErrorException("error occured during clossing this evaluation.")
       }
 
-    }
-  }
-
-  //agent evaluation id
-  async updateEvalStatus(id: string) {
-    const evaluation = await this.agentEvaluationRepo.findOne({
-      where: { id },
-      relations: ['eval_per_audio', 'eval_per_audio.appeal']
-    })
-    if (!evaluation) {
-      throw new NotFoundException('agent evaluation not found')
-    }
-    const appeals = evaluation.eval_per_audio.map(audioEval => audioEval.appeal);
-    if (appeals.length > 0 && appeals.some(appeal =>
-      (appeal && appeal.status == appealStatus.UNDER_REVIEW) ||
-      (appeal && appeal.status != appealStatus.DRAFT)
-    )) {
-      evaluation.status = agentEvalStatus.UNDER_REVIEW
-      await this.agentEvaluationRepo.save(evaluation)
-    } else {
-      evaluation.status = agentEvalStatus.DRAFT
-      await this.agentEvaluationRepo.save(evaluation)
-    }
-    return {
-      appeals
     }
   }
 

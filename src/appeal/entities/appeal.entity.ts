@@ -14,11 +14,14 @@ export class Appeal {
     })
     status: appealStatus
 
-    @Column({default: false})
-    is_declined: boolean
+    @Column({ default: false })
+    is_rejected: boolean
 
-    @Column({ type: "uuid" })
-    agent_id: string
+    @Column({ default: false })
+    is_accepted: boolean
+
+    @Column({ type: "json", nullable: true })
+    changes: object
 
     @Column({ type: "uuid", nullable: true })
     created_by: string

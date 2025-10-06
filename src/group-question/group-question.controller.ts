@@ -46,8 +46,13 @@ export class GroupQuestionController {
   }
 
   @Patch('undo-publish/:id')
-  undoPublish(@Param('id') id: string) {
-    return this.groupQuestionService.undoPublish(id);
+  undoPublish() {
+    return this.groupQuestionService.undoPublish();
+  }
+
+  @Patch('close')
+  closeGroupQuestion() {
+    return this.groupQuestionService.close();
   }
 
   @Patch('temp-delete/:id')
