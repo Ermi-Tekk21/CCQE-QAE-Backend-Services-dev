@@ -5,11 +5,13 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AgentEvaluation } from './entities/evaluation.entity';
 import { GroupQuestionModule } from 'src/group-question/group-question.module';
 import { ClientsModule, Transport } from '@nestjs/microservices';
+import { AppealModule } from 'src/appeal/appeal.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([AgentEvaluation]),
     forwardRef(() => GroupQuestionModule),
+    forwardRef(() => AppealModule),
     ClientsModule.register([
       {
         name: 'KAFKA_SERVICE',

@@ -6,7 +6,9 @@ import { PaginationDto } from 'src/common/dto/pagination.dto';
 
 @Controller('appeal')
 export class AppealController {
-  constructor(private readonly appealService: AppealService) { }
+  constructor(
+    private readonly appealService: AppealService
+  ) { }
 
   //agent evaluation
   @Post(':id')
@@ -50,23 +52,14 @@ export class AppealController {
     return this.appealService.removeAllApealsUnderAgent(id);
   }
 
-  @Patch('under-review/:id')
-  underReview(@Param('id') id: string) {
-    return "this.appealService.underReview(id)"
+  @Patch('accept/:id')
+  acceptAppeal(@Param('id') id: string) {
+    return this.appealService.acceptAppeal(id)
   }
 
-  @Patch('close/:id')
-  close(@Param('id') id: string) {
-    return "this.appealService.close(id)"
+  @Patch('reject/:id')
+  rejectAppeal(@Param('id') id: string) {
+    return this.appealService.rejectAppeal(id);
   }
 
-  @Patch('draft/:id')
-  returnToDraft(@Param('id') id: string) {
-    return "this.appealService.returnToDraft(id)"
-  }
-
-  @Patch('close-and-decline/:id')
-  decline(@Param('id') id: string) {
-    return "this.appealService.decline(id)"
-  }
 }

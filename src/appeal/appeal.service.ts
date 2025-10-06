@@ -6,8 +6,6 @@ import { DataSource, EntityManager, Repository } from 'typeorm';
 import { UpdateAppealDto } from './dto/update-appeal.dto';
 import { EvalPerAudio } from 'src/evaluation/entities/evaluationPerAudio.entity';
 import { appealStatus } from 'src/common/appeal.status';
-import { agentEvalStatus } from 'src/common/agent_evaluation.status';
-import { EvaluationService } from 'src/evaluation/evaluation.service';
 import { paginate } from 'src/common/utils/paginate';
 import { AppealComplain } from './entities/appealComplain.entity';
 import { AgentEvaluation } from 'src/evaluation/entities/evaluation.entity';
@@ -18,13 +16,6 @@ export class AppealService {
     @InjectRepository(Appeal)
     private readonly appealRepo: Repository<Appeal>,
 
-    @InjectRepository(EvalPerAudio)
-    private readonly evalPerAudioRepo: Repository<EvalPerAudio>,
-
-    @InjectRepository(AppealComplain)
-    private readonly appealComplainRepo: Repository<AppealComplain>,
-
-    private readonly evaluationService: EvaluationService,
     private readonly datasource: DataSource,
   ) { }
 
@@ -398,109 +389,83 @@ export class AppealService {
     }
   }
 
-  // // appeal id
-  // // kafka produce message: {status: under review}
-  // async underReview(id: string) {
-  //   try {
-  //     const { appeal } = await this.findOne(id)
-  //     if (appeal.status !== appealStatus.DRAFT) {
-  //       throw new ConflictException('this specified appeal status should be draft to be changed to under review.')
-  //     }
-  //     appeal.status = appealStatus.UNDER_REVIEW
-  //     appeal.evaluation_per_audio.agent_evaluation.status = agentEvalStatus.OPENED
-  //     await this.appealRepo.save(appeal)
-  //     await this.evaluationService.updateEvalStatus(appeal.evaluation_per_audio.agent_evaluation.id)
+  // performed by admin
+  async acceptAppeal(id: string) {
+    try {
+      const { appeal } = await this.findOne(id)
+      if (appeal.status !== appealStatus.DRAFT) {
+        throw new ConflictException('this specified appeal status should be draft to be changed to under review.')
+      }
 
-  //     return {
-  //       success: true,
-  //       message: `appeal with id ${id} status is successfully changed to ${appeal.status}`,
-  //       appeal
-  //     }
-  //   } catch (error) {
-  //     if (error instanceof ConflictException || error instanceof NotFoundException) {
-  //       throw error
-  //     } else {
-  //       console.error(error);
-  //       throw new InternalServerErrorException("error occured during changing status to under review.")
-  //     }
+      appeal.is_accepted = true
+      appeal.status = appealStatus.UNDER_REVIEW
+      await this.appealRepo.save(appeal)
 
-  //   }
-  // }
+      return {
+        success: true,
+        message: `appeal with id ${id} status is successfully changed to ${appeal.status}`,
+        appeal
+      }
+    } catch (error) {
+      if (error instanceof ConflictException || error instanceof NotFoundException) {
+        throw error
+      } else {
+        console.error(error);
+        throw new InternalServerErrorException("error occured during changing status to under review.")
+      }
+    }
+  }
 
-  // //appeal id
-  // async close(id: string) {
-  //   try {
-  //     const { appeal } = await this.findOne(id)
-  //     if (appeal.status !== appealStatus.UNDER_REVIEW) {
-  //       throw new ConflictException('this specified appeal status should be under review to be changed to comleted.')
-  //     }
-  //     appeal.status = appealStatus.CLOSED
-  //     await this.appealRepo.save(appeal)
-  //     await this.evaluationService.updateEvalStatus(appeal.evaluation_per_audio.agent_evaluation.id)
+  // should be performed by admin
+  async rejectAppeal(id: string) {
+    try {
+      const { appeal } = await this.findOne(id)
+      if (appeal.status !== appealStatus.DRAFT) {
+        throw new ConflictException('this specified appeal status should be draft to be reject the appeal.')
+      }
+      appeal.status = appealStatus.CLOSED
+      appeal.is_rejected = true
+      await this.appealRepo.save(appeal)
 
-  //     return {
-  //       success: true,
-  //       message: `appeal with id ${id} status is successfully changed to ${appeal.status}`,
-  //       appeal
-  //     }
-  //   } catch (error) {
-  //     if (error instanceof ConflictException || error instanceof NotFoundException) {
-  //       throw error
-  //     } else {
-  //       console.error(error);
-  //       throw new InternalServerErrorException("error occured during changing status to completed.")
-  //     }
-  //   }
-  // }
+      return {
+        success: true,
+        message: `appeal with id ${id} status is successfully rejected and it's status changed to ${appeal.status}`,
+        appeal
+      }
+    } catch (error) {
+      if (error instanceof ConflictException || error instanceof NotFoundException) {
+        throw error
+      } else {
+        console.error(error);
+        throw new InternalServerErrorException("error occured during changing status to under review.")
+      }
+    }
+  }
 
-  // //appeal id
-  // async returnToDraft(id: string) {
-  //   try {
-  //     const { appeal } = await this.findOne(id)
+  // should be performed by evaluator
+  async closeAppeal(id: string, changes: { from: number, to: number }) {
+    try {
+      const { appeal } = await this.findOne(id)
+      if (appeal.status !== appealStatus.UNDER_REVIEW) {
+        throw new ConflictException('this specified appeal status should be underreview to be closed.')
+      }
 
-  //     // if appeal is declined, the user can not return its status to draft.
-  //     if (appeal.is_declined) {
-  //       throw new ConflictException('Cannot return a declined appeal to draft status.')
-  //     }
-  //     appeal.status = appealStatus.DRAFT
-  //     await this.appealRepo.save(appeal)
+      appeal.changes = changes
+      appeal.status = appealStatus.CLOSED
+      await this.appealRepo.save(appeal)
 
-  //     const agentEvaluationId = appeal.evaluation_per_audio.agent_evaluation.id
-  //     await this.evaluationService.updateEvalStatus(agentEvaluationId)
-
-  //     return {
-  //       success: true,
-  //       message: `appeal with id ${id} status is successfully changed to ${appeal.status}`,
-  //       appeal
-  //     }
-  //   } catch (error) {
-  //     if (error instanceof ConflictException || error instanceof NotFoundException) {
-  //       throw error
-  //     } else {
-  //       console.error(error);
-  //       throw new InternalServerErrorException("error occured during changing status to draft.")
-  //     }
-  //   }
-  // }
-
-  // async decline(id: string) {
-  //   try {
-  //     const { appeal } = await this.findOne(id)
-  //     appeal.status = appealStatus.CLOSED
-  //     appeal.is_declined = true
-  //     await this.appealRepo.save(appeal)
-
-  //     return {
-  //       success: true,
-  //       message: "status successfully changed to completed with declining the appeal"
-  //     }
-  //   } catch (error) {
-  //     if (error instanceof NotFoundException) {
-  //       throw error
-  //     } else {
-  //       console.error(error);
-  //       throw new InternalServerErrorException('something bad happened during declining this appeal.')
-  //     }
-  //   }
-  // }
+      return {
+        success: true,
+        message: `Appeal with id ${id} has been successfully closed. Its status is now '${appeal.status}'. The changes applied are: from ${changes.from} to ${changes.to}.`,
+        appeal
+      }
+    } catch (error) {
+      if (error instanceof ConflictException || error instanceof NotFoundException) {
+        throw error
+      } else {
+        console.error(error);
+        throw new InternalServerErrorException("error occured during changing status to under review.")
+      }
+    }
+  }
 }

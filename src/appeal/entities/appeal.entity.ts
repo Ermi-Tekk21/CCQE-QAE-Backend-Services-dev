@@ -15,7 +15,7 @@ export class Appeal {
     status: appealStatus
 
     @Column({ default: false })
-    is_reject: boolean
+    is_rejected: boolean
 
     @Column({ default: false })
     is_accepted: boolean

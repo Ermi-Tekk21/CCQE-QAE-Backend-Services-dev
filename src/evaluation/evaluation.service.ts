@@ -15,6 +15,7 @@ import { GroupQuestionService } from 'src/group-question/group-question.service'
 import { paginate } from 'src/common/utils/paginate';
 import { ClientKafka } from '@nestjs/microservices';
 import { audioStatus } from 'src/common/audio.status';
+import { AppealService } from 'src/appeal/appeal.service';
 
 @Injectable()
 export class EvaluationService {
@@ -27,6 +28,7 @@ export class EvaluationService {
     private readonly kafkaClient: ClientKafka,
 
     private readonly groupQuestionService: GroupQuestionService,
+    private readonly appealService: AppealService,
     private readonly dataSource: DataSource,
   ) { }
 
@@ -238,7 +240,10 @@ export class EvaluationService {
       let newAgentResult = 0
       for (const updateAudioEvaluationDto of updateEvaluationDto.audios) {
         // check existance of evaluation per audio here
-        const evalPerAudio = await entityManager.findOne(EvalPerAudio, { where: { id: updateAudioEvaluationDto.audio_evaluation_id } })
+        const evalPerAudio = await entityManager.findOne(EvalPerAudio, {
+          where: { id: updateAudioEvaluationDto.audio_evaluation_id },
+          relations: ['appeal']
+        })
         if (!evalPerAudio) {
           throw new NotFoundException(`evaluation per audio with ${updateAudioEvaluationDto.audio_evaluation_id} not found`)
         }
@@ -269,6 +274,7 @@ export class EvaluationService {
           await entityManager.save(EvalPerQuestion, evalPerQue)
         }
         evalPerAudio.result = newAudioResult
+        await this.closeAppeal(evalPerAudio, newAudioResult)
         await entityManager.save(EvalPerAudio, evalPerAudio)
         newAgentResult += evalPerAudio.result
       }
@@ -287,6 +293,16 @@ export class EvaluationService {
       throw error
     } finally {
       queryRunner.release();
+    }
+  }
+
+  async closeAppeal(evalPerAudio: EvalPerAudio, newAudioResult: number) {
+    if (evalPerAudio.appeal != null) {
+      const changes = {
+        from: evalPerAudio.result,
+        to: newAudioResult
+      }
+      await this.appealService.closeAppeal(evalPerAudio.id, changes)
     }
   }
 

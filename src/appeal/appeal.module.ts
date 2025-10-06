@@ -14,5 +14,6 @@ import { AppealComplain } from './entities/appealComplain.entity';
   ],
   controllers: [AppealController],
   providers: [AppealService],
+  exports: [AppealService]
 })
 export class AppealModule { }
