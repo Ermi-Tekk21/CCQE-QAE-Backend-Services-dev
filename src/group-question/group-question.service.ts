@@ -331,21 +331,20 @@ export class GroupQuestionService {
     for (const queData of questionsDto) {
       // Find or create QuestionLookup
       let questionLookup = await entityManager.findOne(QuestionLookup, { where: { content: queData.content } });
-      if (!questionLookup) {
-        questionLookup = entityManager.create(QuestionLookup, { content: queData.content, created_by: queData.created_by, is_deleted: false });
-        await entityManager.save(QuestionLookup, questionLookup);
-      }
-
       // Find Category
       const catagoryEntity = await entityManager.findOne(Catagory, { where: { id: queData.catagoryId } });
       if (!catagoryEntity) {
         throw new HttpException('Catagory not found.', HttpStatus.NOT_FOUND);
       }
 
+      if (!questionLookup) {
+        questionLookup = entityManager.create(QuestionLookup, { content: queData.content, catagory: catagoryEntity, created_by: queData.created_by, is_deleted: false });
+        await entityManager.save(QuestionLookup, questionLookup);
+      }
+
       // Create and save new Question
       const newQuestion = entityManager.create(Question, {
         content: queData.content,
-        catagory: catagoryEntity,
         group_question: savedGroupQuestion,
         question_lookup: questionLookup,
         is_deleted: false,
@@ -444,7 +443,7 @@ export class GroupQuestionService {
         page,
         limit,
         {
-          relations: ['question', 'question.question_lookup', 'question.catagory', 'question.question_answer_option', 'question.question_answer_option.answer_option_lookup'],
+          relations: ['question', 'question.question_lookup', 'question.question_lookup.catagory', 'question.question_answer_option', 'question.question_answer_option.answer_option_lookup'],
           order: { created_at: sortOrder }
         }
       );
@@ -463,7 +462,7 @@ export class GroupQuestionService {
     try {
       const gQue = await this.dataSource.manager.findOne(GroupQuestion, {
         where: { id: id },
-        relations: ['question', 'question.question_lookup', 'question.catagory', 'question.question_answer_option', 'question.question_answer_option.answer_option_lookup', 'parent'],
+        relations: ['question', 'question.question_lookup', 'question.question_lookup.catagory', 'question.question_answer_option', 'question.question_answer_option.answer_option_lookup', 'parent'],
       });
       if (!gQue) {
         throw new NotFoundException(`Group question with ID "${id}" not found.`); // More specific message
@@ -557,24 +556,22 @@ export class GroupQuestionService {
       throw new NotFoundException(`Question with ID "${dtoQ.id}" not found in this group.`);
     }
     // Check and update question lookup if content changes
-    if (dtoQ.content && dtoQ.content !== questionEntity.question_lookup.content) {
+    if (dtoQ.content && dtoQ.catagoryId && dtoQ.content !== questionEntity.question_lookup.content) {
       let questionLookup = await entityManager.findOne(QuestionLookup, { where: { content: dtoQ.content } });
+
+      const catagoryEntity = await entityManager.findOne(Catagory, { where: { id: dtoQ.catagoryId } });
+      if (!catagoryEntity) {
+        throw new HttpException(`Category with ID "${dtoQ.catagoryId}" not found for question "${dtoQ.content}".`, HttpStatus.NOT_FOUND);
+      }
+
       if (!questionLookup) {
-        questionLookup = entityManager.create(QuestionLookup, { content: dtoQ.content, created_by: updatedByUserId, is_deleted: false });
+        questionLookup = entityManager.create(QuestionLookup, { content: dtoQ.content, catagory: catagoryEntity, created_by: updatedByUserId, is_deleted: false });
         await entityManager.save(QuestionLookup, questionLookup);
       }
       questionEntity.question_lookup = questionLookup;
     }
 
     entityManager.merge(Question, questionEntity, dtoQ);
-
-    if (dtoQ.catagoryId) {
-      const catagoryEntity = await entityManager.findOne(Catagory, { where: { id: dtoQ.catagoryId } });
-      if (!catagoryEntity) {
-        throw new HttpException(`Category with ID "${dtoQ.catagoryId}" not found for question "${dtoQ.content}".`, HttpStatus.NOT_FOUND);
-      }
-      questionEntity.catagory = catagoryEntity;
-    }
 
 
     await entityManager.save(Question, questionEntity);
@@ -591,17 +588,17 @@ export class GroupQuestionService {
     delete questionData.id;
 
     let questionLookup = await entityManager.findOne(QuestionLookup, { where: { content: dtoQ.content } });
-    if (!questionLookup) {
-      questionLookup = entityManager.create(QuestionLookup, { content: dtoQ.content, created_by: updatedByUserId, is_deleted: false });
-      await entityManager.save(QuestionLookup, questionLookup);
-    }
     const catagory = await entityManager.findOne(Catagory, { where: { id: dtoQ.catagoryId } })
     if (!catagory) {
       throw new NotFoundException(`catagory ${dtoQ.catagoryId} not found`)
     }
+    if (!questionLookup) {
+      questionLookup = entityManager.create(QuestionLookup, { content: dtoQ.content, catagory: catagory, created_by: updatedByUserId, is_deleted: false });
+      await entityManager.save(QuestionLookup, questionLookup);
+    }
+
     const newQuestion = entityManager.create(Question, {
       ...questionData,
-      catagory: catagory,
       group_question: groupQuestion,
       question_lookup: questionLookup,
       created_by: updatedByUserId || groupQuestion.created_by,
@@ -685,7 +682,7 @@ export class GroupQuestionService {
     try {
       let groupQuestion = await entityManager.findOne(GroupQuestion, {
         where: { id },
-        relations: ['question', 'question.question_lookup', 'question.catagory', 'question.question_answer_option', 'question.question_answer_option.answer_option_lookup'],
+        relations: ['question', 'question.question_lookup', 'question.question_lookup.catagory', 'question.question_answer_option', 'question.question_answer_option.answer_option_lookup'],
       });
 
       if (!groupQuestion) {
@@ -808,7 +805,7 @@ export class GroupQuestionService {
         relations: ['agent_evaluation']
       })
 
-      if (group_question?.agent_evaluation || group_question?.agent_evaluation.length != null) {
+      if (group_question?.agent_evaluation.length !== 0) {
         throw new BadRequestException('you can not undo publish since evaluation associated with this graoup question has started.')
       }
       gQue.is_active = false
@@ -845,7 +842,7 @@ export class GroupQuestionService {
     try {
       const gQue = await entityManager.findOne(GroupQuestion, {
         where: { id },
-        relations: ['question', 'question.question_lookup', 'question.catagory', 'question.question_answer_option', 'question.question_answer_option.answer_option_lookup'],
+        relations: ['question', 'question.question_lookup', 'question.question_lookup.catagory', 'question.question_answer_option', 'question.question_answer_option.answer_option_lookup'],
         withDeleted: true
       });
 
@@ -1004,7 +1001,7 @@ export class GroupQuestionService {
           id: queData.id,
           content: queData.question_lookup.content,
           weight: queData.weight,
-          catagoryId: queData.catagory.id,
+          catagoryId: queData.question_lookup.catagory.id,
           updated_question_answer_option: queData.question_answer_option
             ? queData.question_answer_option.map(ansOp => ({
               id: ansOp.id,
@@ -1062,7 +1059,7 @@ export class GroupQuestionService {
       where: {
         is_active: true
       },
-      relations: ['question', 'question.question_lookup', 'question.catagory', 'question.question_answer_option', 'question.question_answer_option.answer_option_lookup', 'parent'],
+      relations: ['question', 'question.question_lookup', 'question.question_lookup.catagory', 'question.question_answer_option', 'question.question_answer_option.answer_option_lookup', 'parent'],
     })
 
     if (!groupQuestion) {
