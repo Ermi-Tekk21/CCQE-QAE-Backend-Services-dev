@@ -457,28 +457,6 @@ export class EvaluationService {
     }
   }
 
-  //agent evaluation id // to be deleted unnessary
-  async updateEvalStatus(id: string) {
-    const evaluation = await this.agentEvaluationRepo.findOne({
-      where: { id },
-      relations: ['eval_per_audio', 'eval_per_audio.appeal']
-    })
-    if (!evaluation) {
-      throw new NotFoundException('agent evaluation not found')
-    }
-    const appeals = evaluation.eval_per_audio.map(audioEval => audioEval.appeal);
-    if (appeals.length > 0 && appeals.some(appeal =>
-      (appeal && appeal.status == appealStatus.UNDER_REVIEW) ||
-      (appeal && appeal.status != appealStatus.DRAFT)
-    )) {
-      evaluation.status = agentEvalStatus.OPENED
-      await this.agentEvaluationRepo.save(evaluation)
-    }
-    return {
-      appeals
-    }
-  }
-
   UpdateAudioStatus(message: { audio_id: string, status: string }) {
     this.kafkaClient.emit('evaluation_status_updater', message);
     return { message: `audio with id ${message.audio_id} status has been changed to ${message.status}` };
