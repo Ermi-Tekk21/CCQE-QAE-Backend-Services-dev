@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Inject, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { CreateAppealDto } from './dto/create-appeal.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Appeal } from './entities/appeal.entity';
@@ -10,12 +10,16 @@ import { paginate } from 'src/common/utils/paginate';
 import { AppealComplain } from './entities/appealComplain.entity';
 import { AgentEvaluation } from 'src/evaluation/entities/evaluation.entity';
 import { agentEvalStatus } from 'src/common/agent_evaluation.status';
+import { ClientKafka } from '@nestjs/microservices';
 
 @Injectable()
 export class AppealService {
   constructor(
     @InjectRepository(Appeal)
     private readonly appealRepo: Repository<Appeal>,
+
+    @Inject('KAFKA_SERVICE')
+    private readonly kafkaClient: ClientKafka,
 
     private readonly datasource: DataSource,
   ) { }
@@ -60,6 +64,14 @@ export class AppealService {
         })
         await entityManager.save(Appeal, newAppeal)
       }
+
+      // produce appeal for admin here
+      const notifyMessage = {
+        assignmentId: agentEvaluation.agent_assignment_id,
+        complian: createAppealDto.complain
+      }
+      const { message: notifyKafkaMessage } = this.notifyAppeal(notifyMessage)
+      console.log(notifyKafkaMessage);
 
       await queryRunner.commitTransaction();
 
@@ -410,6 +422,14 @@ export class AppealService {
       appeal.status = appealStatus.UNDER_REVIEW
       await this.appealRepo.save(appeal)
 
+      // produce kafka for notifing the evaluator
+      const notifyMessage = {
+        assignmentId: appeal.evaluation_per_audio.agent_evaluation.agent_assignment_id,
+        appeal
+      }
+      const { message: notifyKafkaMessage } = this.notifyEvaluatorOfAcceptedAppeal(notifyMessage)
+      console.log(notifyKafkaMessage);
+
       return {
         success: true,
         message: `appeal with id ${id} status is successfully changed to ${appeal.status}`,
@@ -435,6 +455,14 @@ export class AppealService {
       appeal.status = appealStatus.CLOSED
       appeal.is_rejected = true
       await this.appealRepo.save(appeal)
+
+      // produce kafka for notifing the agent
+      const notifyMessage = {
+        assignmentId: appeal.evaluation_per_audio.agent_evaluation.agent_assignment_id,
+        appeal
+      }
+      const { message: notifyKafkaMessage } = this.notifyAgentOfRejectedAppeal(notifyMessage)
+      console.log(notifyKafkaMessage);
 
       return {
         success: true,
@@ -483,5 +511,20 @@ export class AppealService {
         throw new InternalServerErrorException("error occured during changing status to under review.")
       }
     }
+  }
+
+  notifyAppeal(message: { assignmentId: string, complian?: string }) {
+    this.kafkaClient.emit('notify_admin', message);
+    return { message: `An appeal has been submitted for the evaluator-agent assignment with ID ${message.assignmentId}. The assignment ID has been sent to the UMS service for further processing. Complain details: ${message.complian ?? 'No complain provided.'}` };
+  }
+
+  notifyEvaluatorOfAcceptedAppeal(message: { assignmentId: string, appeal: Appeal }) {
+    this.kafkaClient.emit('notify_evaluator', message);
+    return { message: `An appeal with ID ${message.appeal.id} for assignment ${message.assignmentId} has been accepted by the admin and is now under review. The appeal has been successfully produced to the UMS service to notify the evaluator.` };
+  }
+
+  notifyAgentOfRejectedAppeal(message: { assignmentId: string, appeal: Appeal }) {
+    this.kafkaClient.emit('notify_agent_appeal_rejection', message);
+    return { message: `An appeal with ID ${message.appeal.id} for assignment ${message.assignmentId} has been rejected by the admin. The appeal rejection has been successfully produced to the UMS service to notify the agent.` };
   }
 }

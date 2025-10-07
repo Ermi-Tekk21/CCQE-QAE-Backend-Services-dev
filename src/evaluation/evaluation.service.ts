@@ -251,6 +251,7 @@ export class EvaluationService {
       }
       await entityManager.save(AgentEvaluation, agentEvaluation)
       let newAgentResult = 0
+      let isAppealUpdate = false;
       for (const updateAudioEvaluationDto of updateEvaluationDto.audios) {
         // check existance of evaluation per audio here
         const evalPerAudio = await entityManager.findOne(EvalPerAudio, {
@@ -290,6 +291,7 @@ export class EvaluationService {
         }
         evalPerAudio.result = newAudioResult
         if (evalPerAudio.appeal !== null) {
+          isAppealUpdate = true;
           await this.closeAppeal(evalPerAudio, intialResult, newAudioResult)
         }
 
@@ -300,6 +302,16 @@ export class EvaluationService {
 
       await entityManager.save(AgentEvaluation, agentEvaluation)
       await entityManager.queryRunner?.commitTransaction()
+
+      // produce kafka for notifing the evaluated agent
+      const notifyMessage = {
+        assignmentId: agentEvaluation.agent_assignment_id,
+        evaluation: agentEvaluation,
+        isAppealUpdate
+      }
+      const { message: notifyKafkaMessage } = this.notifyAgentEval(notifyMessage)
+      console.log(notifyKafkaMessage);
+
       return {
         success: true,
         message: "evaluation successfully updated",
@@ -474,8 +486,11 @@ export class EvaluationService {
     };
   }
 
-  notifyAgentEval(message: { assignmentId: string, evaluation: AgentEvaluation }) {
+  notifyAgentEval(message: { assignmentId: string, evaluation: AgentEvaluation, isAppealUpdate?: boolean }) {
     this.kafkaClient.emit('notify_agent', message);
+    if (message.isAppealUpdate) {
+      return { message: `The evaluation for assignment ID ${message.assignmentId} has been updated following an appeal review. The changes have been successfully processed and the updated evaluation has been produced to the UMS service.` };
+    }
     return { message: `evaluator-agents assignment with id ${message.assignmentId} has been evaluated and it's assignment id for this specific avaluation is produced to ums service.` };
   }
 }
