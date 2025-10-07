@@ -93,32 +93,15 @@ export class AppealService {
     }
   }
 
-  async findAll(page: number, limit: number, sortOrder: 'ASC' | 'DESC' = 'DESC') {
+  async findAll(page: number, limit: number, status: appealStatus, sortOrder: 'ASC' | 'DESC' = 'DESC') {
     try {
-      const paginatedAppeals = await paginate(this.appealRepo, page, limit,
-        {
-          order: { created_at: sortOrder },
-          relations: ['evaluation_per_audio']
-        }
-      )
-      return {
-        success: true,
-        appeals: paginatedAppeals.data,
-        meta: paginatedAppeals.meta
+      const where: any = {};
+      if (status) {
+        where.status = status;
       }
-    } catch (error) {
-      console.error(error);
-      throw new InternalServerErrorException("error occured during fetching appeals");
-    }
-  }
-
-  async findAllDraftedAppeal(page: number, limit: number, sortOrder: 'ASC' | 'DESC' = 'DESC') {
-    try {
       const paginatedAppeals = await paginate(this.appealRepo, page, limit,
         {
-          where: {
-            status: appealStatus.DRAFT
-          },
+          where,
           order: { created_at: sortOrder },
           relations: ['evaluation_per_audio']
         }

@@ -3,6 +3,7 @@ import { AppealService } from './appeal.service';
 import { CreateAppealDto } from './dto/create-appeal.dto';
 import { UpdateAppealDto } from './dto/update-appeal.dto';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
+import { appealStatus } from 'src/common/appeal.status';
 
 @Controller('appeal')
 export class AppealController {
@@ -17,17 +18,13 @@ export class AppealController {
   }
 
   @Get()
-  findAll(@Query() pagination: PaginationDto) {
+  findAll(
+    @Query() pagination: PaginationDto,
+    @Query('status') status: appealStatus,
+  ) {
     const { page, limit, sort_order } = pagination;
 
-    return this.appealService.findAll(page, limit, sort_order as 'ASC' | 'DESC');
-  }
-
-  @Get('all-drafted')
-  findAllDraftedAppeal(@Query() pagination: PaginationDto) {
-    const { page, limit, sort_order } = pagination;
-
-    return this.appealService.findAllDraftedAppeal(page, limit, sort_order as 'ASC' | 'DESC');
+    return this.appealService.findAll(page, limit, status, sort_order as 'ASC' | 'DESC');
   }
 
   @Get(':id')
@@ -69,4 +66,8 @@ export class AppealController {
     return this.appealService.rejectAppeal(id);
   }
 
+  @Patch('close/:id')
+  closeAppeal(@Param('id') id: string, @Body() changes: { from: number, to: number }) {
+    return this.appealService.closeAppeal(id, changes);
+  }
 }
