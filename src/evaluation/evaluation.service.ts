@@ -257,9 +257,11 @@ export class EvaluationService {
           where: { id: updateAudioEvaluationDto.audio_evaluation_id },
           relations: ['appeal']
         })
+
         if (!evalPerAudio) {
           throw new NotFoundException(`evaluation per audio with ${updateAudioEvaluationDto.audio_evaluation_id} not found`)
         }
+        const intialResult = evalPerAudio?.result
         let newAudioResult = 0
         for (const updateQuestionEvaluationDto of updateAudioEvaluationDto.questions) {
           // check existance of evaluation per question here
@@ -287,7 +289,10 @@ export class EvaluationService {
           await entityManager.save(EvalPerQuestion, evalPerQue)
         }
         evalPerAudio.result = newAudioResult
-        await this.closeAppeal(evalPerAudio, newAudioResult)
+        if (evalPerAudio.appeal !== null) {
+          await this.closeAppeal(evalPerAudio, intialResult, newAudioResult)
+        }
+
         await entityManager.save(EvalPerAudio, evalPerAudio)
         newAgentResult += evalPerAudio.result
       }
@@ -312,14 +317,13 @@ export class EvaluationService {
     }
   }
 
-  async closeAppeal(evalPerAudio: EvalPerAudio, newAudioResult: number) {
-    if (evalPerAudio.appeal != null) {
-      const changes = {
-        from: evalPerAudio.result,
-        to: newAudioResult
-      }
-      await this.appealService.closeAppeal(evalPerAudio.id, changes)
+  async closeAppeal(evalPerAudio: EvalPerAudio, intialResult: number, newAudioResult: number) {
+    const changes = {
+      from: intialResult,
+      to: newAudioResult
     }
+    const appealId = evalPerAudio.appeal.id
+    await this.appealService.closeAppeal(appealId, changes)
   }
 
   async remove(id: string) {

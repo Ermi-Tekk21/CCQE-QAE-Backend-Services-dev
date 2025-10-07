@@ -9,6 +9,7 @@ import { appealStatus } from 'src/common/appeal.status';
 import { paginate } from 'src/common/utils/paginate';
 import { AppealComplain } from './entities/appealComplain.entity';
 import { AgentEvaluation } from 'src/evaluation/entities/evaluation.entity';
+import { agentEvalStatus } from 'src/common/agent_evaluation.status';
 
 @Injectable()
 export class AppealService {
@@ -478,6 +479,13 @@ export class AppealService {
       appeal.changes = changes
       appeal.status = appealStatus.CLOSED
       await this.appealRepo.save(appeal)
+
+      // find agentevaluation here then if no appeal under it close agent evaluation
+      const agentEval = appeal.evaluation_per_audio.agent_evaluation
+      const appeals = agentEval.eval_per_audio.map(appeal => appeal).filter(Boolean);
+      if (appeals.length == 0) {
+        agentEval.status = agentEvalStatus.CLOSED
+      }
 
       return {
         success: true,
