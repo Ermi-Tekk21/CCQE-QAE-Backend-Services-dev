@@ -4,8 +4,8 @@ import { UpdateCatagoryDto } from './dto/update-catagory.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Catagory } from './entities/catagory.entity';
 import { Repository } from 'typeorm';
-import { Question } from 'src/group-question/entities/question-entities/question.entity';
 import { paginate } from 'src/common/utils/paginate';
+import { QuestionLookup } from 'src/question-lookup/entities/question-lookup.entity';
 
 @Injectable()
 export class CatagoryService {
@@ -13,29 +13,29 @@ export class CatagoryService {
     @InjectRepository(Catagory)
     private readonly catagoryRepo: Repository<Catagory>,
 
-    @InjectRepository(Question)
-    private readonly questionRepo: Repository<Question>
+    @InjectRepository(QuestionLookup)
+    private readonly questionLookupRepo: Repository<QuestionLookup>
   ) { }
 
   async create(createCatagoryDto: CreateCatagoryDto) {
     try {
       const doesExist = await this.catagoryRepo.findOne({ where: { name: createCatagoryDto.name } })
       if (doesExist) {
-        throw new HttpException("duplicate entry, this catagory already created", 400)
+        throw new HttpException(`Duplicate entry: The category with name '${createCatagoryDto.name}' already exists. Please use a different name.`, 400)
       }
       const catagory = this.catagoryRepo.create(createCatagoryDto)
       catagory.updated_at = null
       await this.catagoryRepo.save(catagory)
       return {
         success: true,
-        message: "Catagory successfully created",
+        message: `Category '${catagory.name}' created successfully with ID '${catagory.id}'.`,
         catagory
       }
     } catch (error) {
       if (error instanceof HttpException) {
         throw error
       } else {
-        throw new InternalServerErrorException("Error occured during creating catagory")
+        throw new InternalServerErrorException(`Error occurred during creating category: ${error?.message || error}`)
       }
     }
   }
@@ -52,7 +52,7 @@ export class CatagoryService {
       };
     } catch (error) {
       console.error(error);
-      throw new InternalServerErrorException('something bad happened');
+      throw new InternalServerErrorException('An error occurred while retrieving categories. Please try again later.');
     }
   }
 
@@ -60,9 +60,9 @@ export class CatagoryService {
     try {
       const catagory = await this.catagoryRepo.findOne({ where: { id: id }, withDeleted: true })
       if (!catagory) {
-        throw new NotFoundException("Category not found")
+        throw new NotFoundException(`Category with id '${id}' not found. Please verify the provided id and try again.`)
       } else if (catagory.is_deleted) {
-        throw new BadRequestException(`catagory with id ${id} is soft deleted`)
+        throw new BadRequestException(`Category with id '${id}' has been soft deleted. Please restore it before accessing or modifying.`)
       }
       return {
         success: true,
@@ -72,16 +72,16 @@ export class CatagoryService {
       if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error
       } else if (error.code == "22P02") {
-        throw new HttpException("invalid catagory uuid", 400)
+        throw new HttpException("Invalid category UUID format. Please provide a valid UUID string for the category id.", 400)
       } else {
         console.error(error);
-        throw new InternalServerErrorException("Error occurred during looking for specified catagory");
+        throw new InternalServerErrorException(`Error occurred while retrieving category with id '${id}': ${error?.message || error}`);
       }
     }
   }
 
   async getAllQuesPerCatagory(id: string, page: number, limit: number, sortOrder: 'ASC' | 'DESC' = 'DESC') {
-    const paginatedQuestions = await paginate(this.questionRepo, page, limit, {
+    const paginatedQuestions = await paginate(this.questionLookupRepo, page, limit, {
       where: {
         catagory: {
           id: id,
@@ -90,7 +90,6 @@ export class CatagoryService {
       order: {
         created_at: sortOrder
       },
-      relations: ['question_lookup'],
     });
 
     return {
@@ -111,7 +110,7 @@ export class CatagoryService {
 
       return {
         success: true,
-        message: "Catagory updated successfully",
+        message: `Category '${updated.name}' (ID: '${updated.id}') updated successfully.`,
         "updated catagory": updated
       }
     }
@@ -120,7 +119,7 @@ export class CatagoryService {
         throw error;
       } else {
         console.error(error);
-        throw new InternalServerErrorException("Error occured during updeting catagories")
+        throw new InternalServerErrorException(`Error occurred during updating category with id '${id}': ${error?.message || error}`)
       }
     }
   }
@@ -144,7 +143,7 @@ export class CatagoryService {
       if (error instanceof BadRequestException || error instanceof NotFoundException || error instanceof HttpException) {
         throw error;
       }
-      throw new InternalServerErrorException("Error occurred during soft deletion");
+      throw new InternalServerErrorException(`Error occurred during soft deletion of category with id '${id}': ${error?.message || error}`);
     }
   }
 
@@ -153,9 +152,9 @@ export class CatagoryService {
       const catagory = await this.catagoryRepo.findOne({ where: { id }, withDeleted: true })
 
       if (!catagory) {
-        throw new NotFoundException("catagory not found")
+        throw new NotFoundException(`Category with id '${id}' not found. Please verify the provided id and try again.`)
       } else if (!catagory.is_deleted) {
-        throw new BadRequestException("already restored or not soft deleted catagory")
+        throw new BadRequestException("Category with id '${id}' is not soft deleted or has already been restored. No restoration is needed.")
       }
 
       await this.catagoryRepo.restore(id);
@@ -165,16 +164,16 @@ export class CatagoryService {
 
       return {
         success: true,
-        message: "Catagory is restored successfully",
+        message: `Category '${catagory.name}' (ID: '${catagory.id}') has been successfully restored.`,
         "restored catagory": catagory
       }
     } catch (error) {
       if (error instanceof BadRequestException || error instanceof NotFoundException) {
         throw error;
       } else if (error.code == "22P02") {
-        throw new HttpException("invalid catagory uuid", 400)
+        throw new HttpException("Invalid category UUID format. Please provide a valid UUID string for the category id when restoring soft deleted categories.", 400)
       } else {
-        throw new HttpException("error happend during restoring soft delete", 500)
+        throw new HttpException(`An error occurred while restoring the soft deleted category with id '${id}': ${error?.message || error}`, 500)
       }
     }
   }
@@ -189,18 +188,18 @@ export class CatagoryService {
       await this.catagoryRepo.delete(id);
       return {
         success: true,
-        message: "Category successfully deleted",
+        message: `Category '${deletedCatagory.catagory.name}' (ID: '${deletedCatagory.catagory.id}') has been permanently deleted.`,
         "deleted catagory": deletedCatagory.catagory
       }
     } catch (error) {
       if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error
       } else if (error.code == "22P02") {
-        throw new HttpException("invalid catagory uuid", 400)
+        throw new HttpException("Invalid category UUID format. Please provide a valid UUID string for the category id when deleting a category.", 400)
       } else if (error.code == 23503) {
-        throw new BadRequestException("this catagory id is referenced in question table")
+        throw new BadRequestException("Cannot delete this category because it is referenced by one or more questions. Please remove or reassign the related questions before deleting the category.")
       } else {
-        throw new HttpException('Failed to delete catagory', HttpStatus.INTERNAL_SERVER_ERROR);
+        throw new InternalServerErrorException(`An unexpected error occurred while deleting category with id '${id}': ${error?.message || error}. Please try again later or contact support if the issue persists.`);
       }
     }
   }

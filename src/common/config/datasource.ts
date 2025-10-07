@@ -11,6 +11,7 @@ import { QuestionAnswerOp } from 'src/group-question/entities/question-answer-op
 import { Question } from 'src/group-question/entities/question-entities/question.entity';
 import { VersionChangesDetail } from 'src/group-question/entities/version-changes-detail.entity';
 import { Appeal } from 'src/appeal/entities/appeal.entity';
+import { AppealComplain } from 'src/appeal/entities/appealComplain.entity';
 
 ConfigModule.forRoot({ isGlobal: true });
 
@@ -32,6 +33,7 @@ export const typeOrmConfig: TypeOrmModuleOptions = {
     QuestionAnswerOp,
     Question,
     Appeal,
+    AppealComplain,
     VersionChangesDetail
   ],
   synchronize: true,

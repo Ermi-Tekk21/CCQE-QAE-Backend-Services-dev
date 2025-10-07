@@ -45,9 +45,6 @@ export class Question {
     @ManyToOne(() => QuestionLookup, (question_lookup) => question_lookup.question)
     question_lookup: QuestionLookup
 
-    @ManyToOne(() => Catagory, (catagory) => catagory.question)
-    catagory: Catagory
-
     @OneToMany(() => QuestionAnswerOp, (questionAnswerOp) => questionAnswerOp.question, {
         cascade: true,
     })

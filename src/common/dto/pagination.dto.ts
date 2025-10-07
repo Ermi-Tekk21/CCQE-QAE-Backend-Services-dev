@@ -15,6 +15,11 @@ export class PaginationDto {
   limit: number = 10;
 
   @IsOptional()
+  @IsString()
+  @IsIn(["draft", "under_review", "closed"], { message: 'status should be draft, under_review or closed' })
+  status: string;
+
+  @IsOptional()
   @Transform(({ value }) => value.replace(/['"]/g, ''))
   @Type(() => String)
   @IsString()

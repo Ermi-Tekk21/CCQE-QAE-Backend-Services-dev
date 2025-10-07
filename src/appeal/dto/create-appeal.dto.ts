@@ -1,8 +1,9 @@
-import { IsArray, IsUUID } from "class-validator";
+import { IsArray, IsOptional, IsString, IsUUID } from "class-validator";
 
 export class CreateAppealDto {
-    @IsUUID()
-    agent_id: string
+    @IsOptional()
+    @IsString()
+    complain: string
 
     @IsArray()
     @IsUUID("all", { each: true })

@@ -1,14 +1,16 @@
-import { ConflictException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Inject, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { CreateAppealDto } from './dto/create-appeal.dto';
-import { UpdateAppealDto } from './dto/update-appeal.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Appeal } from './entities/appeal.entity';
 import { DataSource, EntityManager, Repository } from 'typeorm';
+import { UpdateAppealDto } from './dto/update-appeal.dto';
 import { EvalPerAudio } from 'src/evaluation/entities/evaluationPerAudio.entity';
 import { appealStatus } from 'src/common/appeal.status';
-import { agentEvalStatus } from 'src/common/agent_evaluation.status';
-import { EvaluationService } from 'src/evaluation/evaluation.service';
 import { paginate } from 'src/common/utils/paginate';
+import { AppealComplain } from './entities/appealComplain.entity';
+import { AgentEvaluation } from 'src/evaluation/entities/evaluation.entity';
+import { agentEvalStatus } from 'src/common/agent_evaluation.status';
+import { ClientKafka } from '@nestjs/microservices';
 
 @Injectable()
 export class AppealService {
@@ -16,53 +18,102 @@ export class AppealService {
     @InjectRepository(Appeal)
     private readonly appealRepo: Repository<Appeal>,
 
-    @InjectRepository(EvalPerAudio)
-    private readonly evalPerAudioRepo: Repository<EvalPerAudio>,
+    @Inject('KAFKA_SERVICE')
+    private readonly kafkaClient: ClientKafka,
 
-    private readonly evaluationService: EvaluationService,
     private readonly datasource: DataSource,
   ) { }
 
-  async create(createAppealDto: CreateAppealDto) {
+  async create(id: string, createAppealDto: CreateAppealDto) {
+    const queryRunner = this.datasource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    const entityManager: EntityManager = queryRunner.manager;
     try {
-      const newAppeals: Appeal[] = []
-      
-      for (const audioAppealId of createAppealDto.audio_evaluation_ids) {
-
-        const audioEval = await this.evalPerAudioRepo.findOne({ where: { id: audioAppealId } });
-        if (!audioEval) {
-          throw new NotFoundException(`audio evaluation with id ${audioAppealId} not found.`);
-        }
-        const newAppeal = this.appealRepo.create({
-          agent_id: createAppealDto.agent_id,
-          evaluation_per_audio: audioEval
-        });
-        newAppeals.push(newAppeal)
+      let agentEvaluation = await entityManager.findOne(AgentEvaluation, {
+        where: {
+          id: id
+        }, relations: ['eval_per_audio', 'eval_per_audio.appeal']
+      })
+      if (!agentEvaluation) {
+        throw new BadRequestException(`Agent evaluation with id ${id} not found. Unable to create appeal.`);
       }
 
-      await this.appealRepo.save(newAppeals);
+      const newComplain: AppealComplain = entityManager.create(AppealComplain, {
+        complain: createAppealDto.complain
+      })
+      await entityManager.save(AppealComplain, newComplain)
+
+      agentEvaluation.complain = newComplain
+      await entityManager.save(AgentEvaluation, agentEvaluation)
+
+      for (const audioEvalId of createAppealDto.audio_evaluation_ids) {
+        const audioEvaluation = await entityManager.findOne(EvalPerAudio, {
+          where: {
+            id: audioEvalId
+          }, relations: ['appeal', 'agent_evaluation']
+        })
+        if (!audioEvaluation) {
+          throw new BadRequestException(`audio evaluation with id ${audioEvalId} not found under agent valuation with id ${id}`)
+        }
+        if (audioEvaluation.agent_evaluation.id !== agentEvaluation.id) {
+          throw new BadRequestException(`Audio evaluation with id ${audioEvalId} does not belong to agent evaluation with id ${id}.`)
+        }
+        const newAppeal = entityManager.create(Appeal, {
+          evaluation_per_audio: audioEvaluation
+        })
+        await entityManager.save(Appeal, newAppeal)
+      }
+
+      // produce appeal for admin here
+      const notifyMessage = {
+        assignmentId: agentEvaluation.agent_assignment_id,
+        complian: createAppealDto.complain
+      }
+      const { message: notifyKafkaMessage } = this.notifyAppeal(notifyMessage)
+      console.log(notifyKafkaMessage);
+
+      await queryRunner.commitTransaction();
+
+      const updatedEvaluation = await entityManager.findOne(AgentEvaluation, {
+        where: {
+          id: id
+        }, relations: ['complain', 'eval_per_audio', 'eval_per_audio.appeal']
+      })
       return {
         success: true,
         message: "appeal successfully created.",
-        newAppeals
+        complain: createAppealDto.complain ? createAppealDto.complain : 'no complain text exist',
+        "agent evaluation": updatedEvaluation
       }
     }
+
     catch (error) {
-      if (error instanceof NotFoundException) {
+      if (queryRunner.isTransactionActive) {
+        await queryRunner.rollbackTransaction();
+      }
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error
       } else if (error.code == 23505) {
-        throw new ConflictException("dubliacte entry error")
+        throw new ConflictException("Duplicate entry error: An appeal with the provided audio evaluation already exists.")
       } else {
         console.error(error);
-        throw new InternalServerErrorException("error occured during creating new appeal");
+        throw new InternalServerErrorException(`An unexpected error occurred while creating a new appeal: ${error?.message || error}`);
       }
+    } finally {
+      await queryRunner.release()
     }
   }
 
-  async findAll(page: number, limit: number, sortOrder: 'ASC' | 'DESC' = 'DESC') {
+  async findAll(page: number, limit: number, status: appealStatus, sortOrder: 'ASC' | 'DESC' = 'DESC') {
     try {
+      const where: any = {};
+      if (status) {
+        where.status = status;
+      }
       const paginatedAppeals = await paginate(this.appealRepo, page, limit,
         {
+          where,
           order: { created_at: sortOrder },
           relations: ['evaluation_per_audio']
         }
@@ -78,23 +129,24 @@ export class AppealService {
     }
   }
 
-  // agentid
-  async findAppealsPerAgentId(id: string, page: number, limit: number, sortOrder: 'ASC' | 'DESC' = 'DESC') {
+  // agent-evaluation id
+  async findAppealsPerAgentEvaluationId(id: string, sortOrder: 'ASC' | 'DESC' = 'DESC') {
     try {
-      const paginatedAppeals = await paginate(this.appealRepo, page, limit, {
-        where: { agent_id: id },
+      const appeals = await this.appealRepo.find({
+        where: {
+          evaluation_per_audio: {
+            agent_evaluation: {
+              id: id
+            }
+          }
+        },
         relations: ['evaluation_per_audio', 'evaluation_per_audio.agent_evaluation'],
         order: { created_at: sortOrder }
-      })
-
-      if (!paginatedAppeals.data || paginatedAppeals.data.length == 0) {
-        throw new NotFoundException(`appeals from agent id ${id} not found.`)
-      }
+      });
 
       return {
         success: true,
-        appeals: paginatedAppeals.data,
-        meta: paginatedAppeals.meta
+        appeals: appeals
       }
     } catch (error) {
       if (error instanceof NotFoundException) {
@@ -131,7 +183,7 @@ export class AppealService {
     }
   }
 
-  // agent id
+  // agent-evaluation id
   async update(id: string, updateAppealDto: UpdateAppealDto) {
     const queryRunner = this.datasource.createQueryRunner();
     await queryRunner.connect();
@@ -139,56 +191,148 @@ export class AppealService {
     const entityManager: EntityManager = queryRunner.manager;
 
     try {
-      const appeals = await entityManager.find(Appeal, {
-        where: { agent_id: id.toString() },
-        relations: ['evaluation_per_audio']
+      const agentEvaluation = await entityManager.findOne(AgentEvaluation, {
+        where: {
+          id: id
+        }, relations: ['eval_per_audio', 'eval_per_audio.appeal', 'complain']
+      })
+      if (!agentEvaluation) {
+        throw new BadRequestException(`Agent evaluation with id ${id} not found. Unable to update appeal.`);
+      }
+      console.log("agent evaluation: ", agentEvaluation);
+
+      const appeals = agentEvaluation.eval_per_audio.map(audioEval => audioEval.appeal).filter(Boolean);
+      if (appeals.length == 0) {
+        throw new BadRequestException(`No appeals found under agent evaluation with id ${id}. Update operation is not permitted because there are no appeals to update.`)
+      }
+      const existingAudioEvalId = agentEvaluation.eval_per_audio.map(audioEval => audioEval.id)
+      if (updateAppealDto.audio_evaluation_ids.some(audioEvalId => !existingAudioEvalId.includes(audioEvalId))) {
+        throw new BadRequestException(
+          `One or more audio evaluation IDs provided in the update request do not exist under the agent evaluation with id ${id}. ` +
+          `Invalid audio evaluation IDs: ${updateAppealDto.audio_evaluation_ids.filter(audioEvalId => !existingAudioEvalId.includes(audioEvalId)).join(', ')}. ` +
+          `Please ensure all audio evaluation IDs belong to the specified agent evaluation before updating the appeal.`
+        );
+      }
+      const existingAppealedAudioEvalId = (await entityManager.find(Appeal, {
+        where: {
+          evaluation_per_audio: {
+            agent_evaluation: {
+              id: id
+            }
+          }
+        }, relations: ['evaluation_per_audio', 'evaluation_per_audio.agent_evaluation']
+      })).map(appeal => appeal.evaluation_per_audio.id)
+
+      const toBeAdded = updateAppealDto.audio_evaluation_ids.filter(audioEvalId => !existingAppealedAudioEvalId.includes(audioEvalId))
+      const toBeDeleted = existingAppealedAudioEvalId.filter(appealedAudioId => !updateAppealDto.audio_evaluation_ids.includes(appealedAudioId))
+
+      //create new appeal
+      for (const audioEvalId of toBeAdded) {
+        const audioEval = await entityManager.findOne(EvalPerAudio, {
+          where: {
+            id: audioEvalId
+          }
+        })
+        if (!audioEval) {
+          throw new NotFoundException(`Audio evaluation with id ${audioEvalId} not found.`);
+        }
+        const newAppeal = entityManager.create(Appeal, {
+          evaluation_per_audio: audioEval
+        })
+        await entityManager.save(Appeal, newAppeal)
+      }
+
+      for (const audioEvalId of toBeDeleted) {
+        const appealToBeDeleted = await entityManager.findOne(Appeal, {
+          where: {
+            evaluation_per_audio: {
+              id: audioEvalId
+            }
+          }, relations: ['evaluation_per_audio']
+        })
+        await entityManager.delete(Appeal, appealToBeDeleted?.id)
+      }
+
+      const updatedAgentEval = await this.updateAgentComplain(entityManager, agentEvaluation, updateAppealDto)
+      await entityManager.save(AgentEvaluation, updatedAgentEval)
+      await queryRunner.commitTransaction()
+
+      const updatedEvaluation = await entityManager.findOne(AgentEvaluation, {
+        where: {
+          id: id
+        }, relations: ['complain', 'eval_per_audio', 'eval_per_audio.appeal']
       })
 
-      if (appeals.length == 0 || !appeals) {
-        throw new NotFoundException(`appeals with agent id ${id} does not exist yet`)
-      }
-      const toBeAddedAudioEvalIds = updateAppealDto.audio_evaluation_ids.filter(audioEvalId =>
-        !appeals.some(appeal => appeal.evaluation_per_audio?.id == audioEvalId)
-      );
-
-      const toBeDeleted: Appeal[] = appeals.filter(appeal =>
-        !updateAppealDto.audio_evaluation_ids.some(audioEvalId => audioEvalId == appeal.evaluation_per_audio?.id)
-      );
-
-
-      const createDto: CreateAppealDto = {
-        agent_id: id,
-        audio_evaluation_ids: toBeAddedAudioEvalIds
-      }
-
-      const { newAppeals } = await this.create(createDto)
-      const toBeDeletedIds = toBeDeleted.map(appeal => appeal.id);
-      if (toBeDeletedIds.length > 0) {
-        await this.appealRepo.delete(toBeDeletedIds);
-      }
       return {
         success: true,
-        agent_id: id,
-        newAppeals
+        message: 'Appeal(s) and complain text updated successfully for the specified agent evaluation.',
+        agentEvaluation: updatedEvaluation
       }
     } catch (error) {
-      if (error instanceof NotFoundException) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error
       } else {
         console.error(error);
         throw new InternalServerErrorException("error occured during updating the appeal")
       }
-    } finally {
+    }
+    finally {
       queryRunner.release()
     }
   }
 
+  private async updateAgentComplain(entityManager: EntityManager, agentEval: AgentEvaluation, updateAppealDto: UpdateAppealDto) {
+    if (updateAppealDto.audio_evaluation_ids.length === 0) {
+      const id = agentEval.complain?.id;
+      if (id) {
+        agentEval.complain = null;
+        await entityManager.save(AgentEvaluation, agentEval)
+        await entityManager.delete(AppealComplain, id);
+      }
+    } else {
+      if (agentEval.complain == null) {
+        const newComplain = entityManager.create(AppealComplain, {
+          complain: updateAppealDto.complain
+        })
+        agentEval.complain = newComplain
+      } else {
+        const updatedComplain = entityManager.merge(AppealComplain, agentEval.complain, {
+          complain: updateAppealDto.complain
+        })
+        await entityManager.save(AppealComplain, updatedComplain)
+      }
+      await entityManager.save(AgentEvaluation, agentEval)
+    }
+    return agentEval;
+  }
+
   // specific audio appeal id
   async remove(id: string) {
+    const queryRunner = this.datasource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    const entityManager: EntityManager = queryRunner.manager;
     try {
       const { appeal: appealToBeDeleted } = await this.findOne(id)
-      await this.appealRepo.delete(appealToBeDeleted.id)
 
+      await this.appealRepo.delete(appealToBeDeleted.id)
+      const { id: agentEvaluationId } = appealToBeDeleted.evaluation_per_audio.agent_evaluation
+      const agentEvaluation = await entityManager.findOne(AgentEvaluation, {
+        where: {
+          id: agentEvaluationId
+        }, relations: ['complain', 'eval_per_audio', 'eval_per_audio.appeal']
+      })
+
+      const appealMap = agentEvaluation?.eval_per_audio?.map(evalPerAudio => evalPerAudio.appeal).filter(Boolean);
+      console.log(appealMap?.length);
+
+      if (appealMap?.length === 0 && agentEvaluation) {
+        const complainId = agentEvaluation.complain?.id
+        agentEvaluation.complain = null
+        await entityManager.save(AgentEvaluation, agentEvaluation)
+        await entityManager.delete(AppealComplain, complainId)
+      }
+      await queryRunner.commitTransaction()
       return {
         success: true,
         message: "deleted successfully",
@@ -196,57 +340,96 @@ export class AppealService {
       }
     }
     catch (error) {
+      await queryRunner.rollbackTransaction()
       if (error instanceof NotFoundException) {
         throw error
       } else {
         console.error(error);
         throw new InternalServerErrorException("error occured during deleting this appeal")
       }
+    } finally {
+      await queryRunner.release()
     }
   }
 
-  //agent id
+  // //agent-evaluation id
   async removeAllApealsUnderAgent(id: string) {
+    const queryRunner = this.datasource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    const entityManager: EntityManager = queryRunner.manager;
     try {
-      const appeals = await this.appealRepo.find({
+      const agentEvaluation = await entityManager.findOne(AgentEvaluation, {
         where: {
-          agent_id: id
-        }, relations: ['evaluation_per_audio', 'evaluation_per_audio.agent_evaluation']
+          id: id
+        }, relations: ['complain', 'eval_per_audio', 'eval_per_audio.appeal']
       });
-      if (!appeals || appeals.length == 0) {
-        throw new NotFoundException(`appeals from agent id ${id} not found.`)
+      if (!agentEvaluation) {
+        throw new NotFoundException(`Agent evaluation with id ${id} not found.`);
       }
-      // If appeal is an array, map to ids; if it's a single object, wrap in array
-      const appealIds = appeals.map((a) => a.id);
-      await this.appealRepo.delete(appealIds)
 
+      // Delete complain if exists
+      if (agentEvaluation.complain) {
+        const complainId = agentEvaluation.complain.id;
+        agentEvaluation.complain = null;
+        await entityManager.save(AgentEvaluation, agentEvaluation);
+        if (complainId) {
+          await entityManager.delete(AppealComplain, complainId);
+        }
+      }
+
+      // Delete all appeals under this agent evaluation
+      for (const audioEval of agentEvaluation.eval_per_audio) {
+        if (audioEval.appeal) {
+          await entityManager.delete(Appeal, audioEval.appeal.id);
+        }
+      }
+
+      await queryRunner.commitTransaction();
+
+      const updatedEvaluation = await entityManager.findOne(AgentEvaluation, {
+        where: {
+          id: id
+        }, relations: ['complain', 'eval_per_audio', 'eval_per_audio.appeal']
+      })
       return {
         success: true,
-        message: `all appeals of agent ${id} deleted successfully`
+        message: `all appeals of agent ${id} deleted successfully`,
+        agentEvaluation: updatedEvaluation
       }
     } catch (error) {
+      await queryRunner.rollbackTransaction()
       if (error instanceof NotFoundException) {
         throw error
       } else {
         console.error(error);
         throw new InternalServerErrorException("error occured during deleting this appeal")
       }
+    } finally {
+      await queryRunner.release()
     }
   }
 
-  // appeal id
-  // kafka produce message: {status: under review}
-  async underReview(id: string) {
+  // performed by admin
+  async acceptAppeal(id: string) {
     try {
       const { appeal } = await this.findOne(id)
       if (appeal.status !== appealStatus.DRAFT) {
         throw new ConflictException('this specified appeal status should be draft to be changed to under review.')
       }
+
+      appeal.is_accepted = true
       appeal.status = appealStatus.UNDER_REVIEW
-      appeal.evaluation_per_audio.agent_evaluation.status = agentEvalStatus.UNDER_REVIEW
       await this.appealRepo.save(appeal)
-      await this.evaluationService.updateEvalStatus(appeal.evaluation_per_audio.agent_evaluation.id)
-      
+
+      // produce kafka for notifing the evaluator
+      const notifyMessage = {
+        assignmentId: appeal.evaluation_per_audio.agent_evaluation.agent_assignment_id,
+        appeal
+      }
+      const { message: notifyKafkaMessage } = this.notifyEvaluatorOfAcceptedAppeal(notifyMessage)
+      console.log(notifyKafkaMessage);
+
       return {
         success: true,
         message: `appeal with id ${id} status is successfully changed to ${appeal.status}`,
@@ -259,24 +442,65 @@ export class AppealService {
         console.error(error);
         throw new InternalServerErrorException("error occured during changing status to under review.")
       }
-
     }
   }
 
-  //appeal id
-  async close(id: string) {
+  // should be performed by admin
+  async rejectAppeal(id: string) {
+    try {
+      const { appeal } = await this.findOne(id)
+      if (appeal.status !== appealStatus.DRAFT) {
+        throw new ConflictException('this specified appeal status should be draft to be reject the appeal.')
+      }
+      appeal.status = appealStatus.CLOSED
+      appeal.is_rejected = true
+      await this.appealRepo.save(appeal)
+
+      // produce kafka for notifing the agent
+      const notifyMessage = {
+        assignmentId: appeal.evaluation_per_audio.agent_evaluation.agent_assignment_id,
+        appeal
+      }
+      const { message: notifyKafkaMessage } = this.notifyAgentOfRejectedAppeal(notifyMessage)
+      console.log(notifyKafkaMessage);
+
+      return {
+        success: true,
+        message: `appeal with id ${id} status is successfully rejected and it's status changed to ${appeal.status}`,
+        appeal
+      }
+    } catch (error) {
+      if (error instanceof ConflictException || error instanceof NotFoundException) {
+        throw error
+      } else {
+        console.error(error);
+        throw new InternalServerErrorException("error occured during changing status to under review.")
+      }
+    }
+  }
+
+  // should be performed by evaluator
+  async closeAppeal(id: string, changes: { from: number, to: number }) {
     try {
       const { appeal } = await this.findOne(id)
       if (appeal.status !== appealStatus.UNDER_REVIEW) {
-        throw new ConflictException('this specified appeal status should be under review to be changed to comleted.')
+        throw new ConflictException('this specified appeal status should be underreview to be closed.')
       }
-      appeal.status = appealStatus.COMPLETED
+
+      appeal.changes = changes
+      appeal.status = appealStatus.CLOSED
       await this.appealRepo.save(appeal)
-      await this.evaluationService.updateEvalStatus(appeal.evaluation_per_audio.agent_evaluation.id)
+
+      // find agentevaluation here then if no appeal under it close agent evaluation
+      const agentEval = appeal.evaluation_per_audio.agent_evaluation
+      const appeals = agentEval.eval_per_audio.map(appeal => appeal).filter(Boolean);
+      if (appeals.length == 0) {
+        agentEval.status = agentEvalStatus.CLOSED
+      }
 
       return {
         success: true,
-        message: `appeal with id ${id} status is successfully changed to ${appeal.status}`,
+        message: `Appeal with id ${id} has been successfully closed. Its status is now '${appeal.status}'. The changes applied are: from ${changes.from} to ${changes.to}.`,
         appeal
       }
     } catch (error) {
@@ -284,59 +508,23 @@ export class AppealService {
         throw error
       } else {
         console.error(error);
-        throw new InternalServerErrorException("error occured during changing status to completed.")
+        throw new InternalServerErrorException("error occured during changing status to under review.")
       }
     }
   }
 
-  //appeal id
-  async returnToDraft(id: string) {
-    try {
-      const { appeal } = await this.findOne(id)
-
-      // if appeal is declined, the user can not return its status to draft.
-      if (appeal.is_declined) {
-        throw new ConflictException('Cannot return a declined appeal to draft status.')
-      }
-      appeal.status = appealStatus.DRAFT
-      await this.appealRepo.save(appeal)
-
-      const agentEvaluationId = appeal.evaluation_per_audio.agent_evaluation.id
-      await this.evaluationService.updateEvalStatus(agentEvaluationId)
-
-      return {
-        success: true,
-        message: `appeal with id ${id} status is successfully changed to ${appeal.status}`,
-        appeal
-      }
-    } catch (error) {
-      if (error instanceof ConflictException || error instanceof NotFoundException) {
-        throw error
-      } else {
-        console.error(error);
-        throw new InternalServerErrorException("error occured during changing status to draft.")
-      }
-    }
+  notifyAppeal(message: { assignmentId: string, complian?: string }) {
+    this.kafkaClient.emit('notify_admin', message);
+    return { message: `An appeal has been submitted for the evaluator-agent assignment with ID ${message.assignmentId}. The assignment ID has been sent to the UMS service for further processing. Complain details: ${message.complian ?? 'No complain provided.'}` };
   }
 
-  async decline(id: string) {
-    try {
-      const { appeal } = await this.findOne(id)
-      appeal.status = appealStatus.COMPLETED
-      appeal.is_declined = true
-      await this.appealRepo.save(appeal)
+  notifyEvaluatorOfAcceptedAppeal(message: { assignmentId: string, appeal: Appeal }) {
+    this.kafkaClient.emit('notify_evaluator', message);
+    return { message: `An appeal with ID ${message.appeal.id} for assignment ${message.assignmentId} has been accepted by the admin and is now under review. The appeal has been successfully produced to the UMS service to notify the evaluator.` };
+  }
 
-      return {
-        success: true,
-        message: "status successfully changed to completed with declining the appeal"
-      }
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error
-      } else {
-        console.error(error);
-        throw new InternalServerErrorException('something bad happened during declining this appeal.')
-      }
-    }
+  notifyAgentOfRejectedAppeal(message: { assignmentId: string, appeal: Appeal }) {
+    this.kafkaClient.emit('notify_agent_appeal_rejection', message);
+    return { message: `An appeal with ID ${message.appeal.id} for assignment ${message.assignmentId} has been rejected by the admin. The appeal rejection has been successfully produced to the UMS service to notify the agent.` };
   }
 }

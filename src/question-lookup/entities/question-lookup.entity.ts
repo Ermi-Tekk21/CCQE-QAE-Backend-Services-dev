@@ -1,5 +1,6 @@
-import { Column, CreateDateColumn, DeleteDateColumn, Entity, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { Column, CreateDateColumn, DeleteDateColumn, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { Question } from "src/group-question/entities/question-entities/question.entity";
+import { Catagory } from "src/catagory/entities/catagory.entity";
 
 @Entity("question_lookup")
 export class QuestionLookup {
@@ -33,4 +34,7 @@ export class QuestionLookup {
     //relationship
     @OneToMany(() => Question, (question) => question.question_lookup)
     question: Question[]
+
+    @ManyToOne(() => Catagory, (catagory) => catagory.questionLookup)
+    catagory: Catagory
 }
