@@ -435,7 +435,7 @@ export class EvaluationService {
       const audioEvaluations: EvalPerAudio[] = evaluation.eval_per_audio
       for (const audioEvaluation of audioEvaluations) {
         if (audioEvaluation.appeal && (audioEvaluation.appeal.status != appealStatus.CLOSED)) {
-          throw new BadRequestException(`apeal up on audio with ${audioEvaluation.audio_id} should be closed before closing agent evaluation.`)
+          throw new BadRequestException(`Appeal for audio with ID ${audioEvaluation.audio_id} is still open. Please resolve and close all appeals before closing the agent evaluation.`)
         }
       }
       evaluation.status = agentEvalStatus.CLOSED
@@ -455,7 +455,7 @@ export class EvaluationService {
 
       return {
         success: true,
-        message: `agent evaluation with agent evaluation id ${id} status is successfully changed to ${evaluation.status}`,
+        message: `Agent evaluation with ID ${id} has been successfully closed. Status updated to "${evaluation.status}". All related audio evaluations have been marked as CLOSED.`,
         evaluation,
       }
     } catch (error) {
@@ -469,7 +469,9 @@ export class EvaluationService {
 
   UpdateAudioStatus(message: { audio_id: string, status: string }) {
     this.kafkaClient.emit('evaluation_status_updater', message);
-    return { message: `audio with id ${message.audio_id} status has been changed to ${message.status} and it's status produced to audio service.` };
+    return {
+      message: `Audio status update: Audio with ID "${message.audio_id}" has been changed to "${message.status}". The status change event has been successfully emitted to the audio service via Kafka.`
+    };
   }
 
   notifyAgentEval(message: { assignmentId: string, evaluation: AgentEvaluation }) {
