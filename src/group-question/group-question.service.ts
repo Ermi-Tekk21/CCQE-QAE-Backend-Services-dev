@@ -16,12 +16,21 @@ import { paginate } from 'src/common/utils/paginate';
 import { agentEvalStatus } from 'src/common/agent_evaluation.status';
 import { CreateQuestionAnswerOPDto } from './dto/question-and-answer-option-dto/create-question_answerOP.dto';
 import { CreateQuestionDto } from './dto/question-dto/create-question.dto';
+import nodeCron from 'node-cron';
+import { UUID } from 'crypto';
+import { AgentEvaluation } from 'src/evaluation/entities/evaluation.entity';
+import { appealStatus } from 'src/common/appeal.status';
+import { Appeal } from 'src/appeal/entities/appeal.entity';
+import { audioStatus } from 'src/common/audio.status';
+import { EvaluationService } from 'src/evaluation/evaluation.service';
 
 @Injectable()
 export class GroupQuestionService {
   constructor(
     @InjectRepository(GroupQuestion)
     private readonly groupQuestionRepo: Repository<GroupQuestion>,
+
+    private readonly evaluationService: EvaluationService,
 
     private readonly dataSource: DataSource,
   ) { }
@@ -157,7 +166,6 @@ export class GroupQuestionService {
         }
       }
     }
-
     return { added, modified };
   }
 
@@ -416,6 +424,8 @@ export class GroupQuestionService {
         ...savedGroupQuestion,
         parent: savedGroupQuestion.parent ? savedGroupQuestion.parent.id : null,
       };
+
+      this.forceCloseWithCronJobs(savedGroupQuestion.id as UUID, savedGroupQuestion.evaluation_ends_at)
 
       return {
         success: true,
@@ -1110,5 +1120,70 @@ export class GroupQuestionService {
       success: true,
       message: `Group question "${activeGroupQuestion.name}" has been successfully closed. All agent evaluations are completed and the evaluation period has ended.`
     }
+  }
+
+  // group questionId
+  private async forceCloseGroupQuestion(id: UUID) {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    const entityManager = queryRunner.manager;
+    try {
+      const groupQestion = await entityManager.findOne(GroupQuestion, {
+        where: {
+          id: id
+        },
+        relations: ['agent_evaluation', 'agent_evaluation.eval_per_audio']
+      })
+      if (!groupQestion) {
+        throw new NotFoundException(`group question with ID "${id}" not found.`);
+      }
+
+      for (const agentEvaluation of groupQestion.agent_evaluation) {
+        if (agentEvaluation.status != agentEvalStatus.CLOSED) {
+          for (const evalPerAudio of agentEvaluation.eval_per_audio) {
+            if (evalPerAudio.appeal != null && evalPerAudio.appeal.status != appealStatus.CLOSED) {
+              const appeal = evalPerAudio.appeal
+              appeal.status = appealStatus.CLOSED
+              await entityManager.save(Appeal, appeal)
+            }
+
+            const message = {
+              audio_id: evalPerAudio.audio_id,
+              status: audioStatus.CLOSED
+            }
+            const { message: audioKafkaMessage } = this.evaluationService.UpdateAudioStatus(message)
+            console.log(audioKafkaMessage);
+          }
+          agentEvaluation.status = agentEvalStatus.CLOSED
+          await entityManager.save(AgentEvaluation, agentEvaluation)
+        }
+        groupQestion.status = groupQuestionStatus.CLOSED
+        await entityManager.save(GroupQuestion, groupQestion)
+      }
+
+
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      console.error('Error in forceClose:', error);
+      throw error;
+    } finally {
+      await queryRunner.release()
+    }
+  }
+
+  // if evaluation ends at reached close all evaluation under this group question using cronjobs
+  forceCloseWithCronJobs(groupQueId: UUID, evalEndsAtDate: Date) {
+      // Schedule the cron job to run at the exact evaluation end date/time
+      const evalEndDate = new Date(evalEndsAtDate);
+      const cronMinute = evalEndDate.getMinutes();
+      const cronHour = evalEndDate.getHours();
+      const cronDay = evalEndDate.getDate();
+      const cronMonth = evalEndDate.getMonth() + 1; // cron months are 1-based
+      // Run once at the specified date/time
+      const cronExpression = `${cronMinute} ${cronHour} ${cronDay} ${cronMonth} *`;
+      nodeCron.schedule(cronExpression, () => {
+        this.forceCloseGroupQuestion(groupQueId);
+      });
   }
 }
