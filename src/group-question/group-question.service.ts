@@ -1,4 +1,4 @@
-import { BadRequestException, forwardRef, HttpException, HttpStatus, Inject, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, forwardRef, HttpException, HttpStatus, Inject, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { groupQuestionStatus } from 'src/common/group_question.status';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import { Question } from 'src/group-question/entities/question-entities/question.entity';
@@ -46,7 +46,11 @@ export class GroupQuestionService {
     });
     if (doesActiveExist) {
       // check for end date, if current date exceedes the active group question endsat date, close it
-      const currentDate = new Date();
+      // Use Ethiopia timezone (EAT/UTC+3) for current date
+      const currentDate = new Date(
+        new Date().toLocaleString('en-US', { timeZone: 'Africa/Addis_Ababa' })
+      );
+
       if (currentDate < new Date(doesActiveExist.evaluation_ends_at)) {
         throw new HttpException(
           `You can't create a new group question before the active one is completed. The current active group question "${doesActiveExist.name}" is still ongoing and its evaluation period ends at ${doesActiveExist.evaluation_ends_at}. Please wait until it is closed before creating a new one.`,
@@ -58,10 +62,15 @@ export class GroupQuestionService {
     }
 
     // 2. Check for an existing GroupQuestion for the current month.
-    const currentDate = new Date();
-    currentDate.setMonth(currentDate.getMonth() - 1);
-    const month = currentDate.toLocaleString('en-US', { month: 'short' });
-    const year = currentDate.getFullYear().toString();
+    // Use Ethiopia timezone (EAT/UTC+3) for current date
+    const currentDate = new Date(
+      new Date().toLocaleString('en-US', { timeZone: 'Africa/Addis_Ababa' })
+    );
+    // Set to previous month for group question naming
+    const previousMonthDate = new Date(currentDate);
+    previousMonthDate.setMonth(previousMonthDate.getMonth() - 1);
+    const month = previousMonthDate.toLocaleString('en-US', { month: 'short' });
+    const year = previousMonthDate.getFullYear().toString();
     const groupQuestionName = `${month}/${year}/EP`;
 
     const dayDifference = (createGroupQuestionDto.evaluation_ends_at.getDate() - currentDate.getDate());
@@ -102,10 +111,14 @@ export class GroupQuestionService {
 
     // Create the GroupQuestion entity instance in memory.
     const createdByUserId = createGroupQuestionDto.created_by;
-    const currentDate = new Date();
-    currentDate.setMonth(currentDate.getMonth() - 1);
-    const month = currentDate.toLocaleString('en-US', { month: 'short' });
-    const year = currentDate.getFullYear().toString();
+    const currentDate = new Date(
+      new Date().toLocaleString('en-US', { timeZone: 'Africa/Addis_Ababa' })
+    );
+    // Set to previous month for group question naming
+    const previousMonthDate = new Date(currentDate);
+    previousMonthDate.setMonth(previousMonthDate.getMonth() - 1);
+    const month = previousMonthDate.toLocaleString('en-US', { month: 'short' });
+    const year = previousMonthDate.getFullYear().toString();
     const groupQuestionName = `${month}/${year}/EP`;
 
     let group_question = entityManager.create(GroupQuestion, createGroupQuestionDto);
@@ -419,24 +432,35 @@ export class GroupQuestionService {
       // Step 4: Process and save all nested questions and answer options
       await this.processNestedQuestions(entityManager, savedGroupQuestion, createGroupQuestionDto.questions);
 
-      await queryRunner.commitTransaction();
-
       const responseData = {
         ...savedGroupQuestion,
         parent: savedGroupQuestion.parent ? savedGroupQuestion.parent.id : null,
       };
 
-      this.forceCloseWithCronJobs(savedGroupQuestion.id as UUID, savedGroupQuestion.evaluation_ends_at)
+      const { cronJobsMessage, deadline } = this.forceCloseWithCronJobs(savedGroupQuestion.id as UUID, savedGroupQuestion.evaluation_ends_at)
+      console.log(cronJobsMessage);
+
+      await queryRunner.commitTransaction();
 
       return {
         success: true,
-        message: 'Group question created successfully',
+        message: `Group question created successfully. ${cronJobsMessage}`,
+        deadline,
         group_question: responseData
       };
     } catch (error) {
       await queryRunner.rollbackTransaction();
       console.error(error);
-      throw error;
+      if (error instanceof HttpException ||
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException ||
+        error instanceof ConflictException
+      ) {
+        throw error;
+      }
+      else {
+        throw new InternalServerErrorException('Failed to create group question due to an unexpected error.')
+      }
     } finally {
       await queryRunner.release();
     }
@@ -1182,37 +1206,44 @@ export class GroupQuestionService {
 
   // if evaluation ends at reached close all evaluation under this group question using cronjobs
   forceCloseWithCronJobs(groupQueId: UUID, evalEndsAtDate: Date) {
-    // Schedule the cron job to run at the exact evaluation end date/time
     const evalEndDate = new Date(evalEndsAtDate);
-    const cronMinute = evalEndDate.getMinutes();
-    const cronHour = evalEndDate.getHours();
+
+    // Extract date components based on the date object's internal timezone (usually UTC/Server Time)
+    const cronMinute = 59
+    const cronHour = 23
     const cronDay = evalEndDate.getDate();
     const cronMonth = evalEndDate.getMonth() + 1; // cron months are 1-based
-    const cronYear = evalEndDate.getFullYear();
-    // Run once at the specified date/time
+    const year = evalEndDate.getFullYear()
+    const deadline = `${year}-${String(cronMonth).padStart(2, '0')}-${String(cronDay).padStart(2, '0')} ${String(cronHour).padStart(2, '0')}:${String(cronMinute).padStart(2, '0')} (24hr format) (EAT timezone)`
 
-    const cronExpression = `${cronMinute} ${cronHour} ${cronDay} ${cronMonth} ${cronYear}`;
-    nodeCron.schedule(cronExpression, () => {
-      this.forceCloseGroupQuestion(groupQueId);
+    // Cron expression to run on the exact date/time *every year*
+    const cronExpression = `${cronMinute} ${cronHour} ${cronDay} ${cronMonth} *`;
+
+    // **Specify the Timezone for Ethiopia (EAT/UTC+3)**
+    const timezone = 'Africa/Addis_Ababa';
+
+    const task = nodeCron.schedule(cronExpression, async () => {
+      console.log(`Executing scheduled force closure for ${groupQueId} (EAT)...`);
+      await this.forceCloseGroupQuestion(groupQueId);
+      task.stop();
+      console.log(`Cron job for ${groupQueId} successfully executed and stopped.`);
+
+    }, {
+      timezone: timezone
     });
-  }
 
-  testCron() {
-    const now = new Date();
-    const runAt = new Date(now.getTime() + 3 * 60000); // 2 minutes from now
-    const cronMinute = runAt.getMinutes();
-    const cronHour = runAt.getHours();
-    const cronDay = runAt.getDate();
-    const cronMonth = runAt.getMonth() + 1; // cron months are 1-based
-    // To run at 10:15 AM on July 5th of this year only (not every year), include the current year in the cron expression:
-    const cronYear = runAt.getFullYear();
-    const cronExpression = `${cronMinute} ${cronHour} ${cronDay} ${cronMonth} * ${cronYear}`;
-    console.log(`${cronMinute} ${cronHour} ${cronDay} ${cronMonth} *`);
+    // Enhance: Provide feedback if cron job scheduling fails or is already scheduled
+    if (!task) {
+      return {
+        deadline,
+        cronJobsMessage: `Failed to schedule automatic closure for group question with ID "${groupQueId}".`
+      };
+    }
 
-    nodeCron.schedule(cronExpression, () => {
-      console.log('Hello World...');
-      console.log("excuted at ", new Date().getMinutes());
-    });
+    return {
+      deadline,
+      cronJobsMessage: `Scheduled automatic closure for group question with ID "${groupQueId}" at ${deadline} (EAT timezone).`
+    };
   }
 
 }

@@ -16,27 +16,22 @@ export class GroupQuestionController {
     return this.groupQuestionService.create(createGroupQuestionDto);
   }
 
-  @Post('testcron')
-  testcron(){
-    return this.groupQuestionService.testCron()
-  }
-
   @Post('force-close-active/:id')
-  async forceClose(@Param('id') id: string){
-    try{
-      const {groupQuestion: activeGroupQue} = await this.groupQuestionService.getActiveGroupQuestion()
-    if (id !== activeGroupQue?.id) {
-      throw new BadRequestException('Provided id does not match the active group question id.');
-    }
-    if (activeGroupQue.status == groupQuestionStatus.CLOSED){
-      throw new BadRequestException('Active group question is already closed.');
-    }
-    console.log(activeGroupQue);
-    return this.groupQuestionService.forceCloseGroupQuestion(activeGroupQue?.id as UUID)
-    }catch(error){
-      if (error instanceof BadRequestException){
+  async forceClose(@Param('id') id: string) {
+    try {
+      const { groupQuestion: activeGroupQue } = await this.groupQuestionService.getActiveGroupQuestion()
+      if (id !== activeGroupQue?.id) {
+        throw new BadRequestException('Provided id does not match the active group question id.');
+      }
+      if (activeGroupQue.status == groupQuestionStatus.CLOSED) {
+        throw new BadRequestException('Active group question is already closed.');
+      }
+      console.log(activeGroupQue);
+      return this.groupQuestionService.forceCloseGroupQuestion(activeGroupQue?.id as UUID)
+    } catch (error) {
+      if (error instanceof BadRequestException) {
         throw error;
-      }else{
+      } else {
         throw new InternalServerErrorException('An unexpected error occurred while force closing the group question.');
       }
     }
