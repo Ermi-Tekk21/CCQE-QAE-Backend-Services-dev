@@ -1,4 +1,4 @@
-import { BadRequestException, HttpException, HttpStatus, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, forwardRef, HttpException, HttpStatus, Inject, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { groupQuestionStatus } from 'src/common/group_question.status';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import { Question } from 'src/group-question/entities/question-entities/question.entity';
@@ -16,12 +16,22 @@ import { paginate } from 'src/common/utils/paginate';
 import { agentEvalStatus } from 'src/common/agent_evaluation.status';
 import { CreateQuestionAnswerOPDto } from './dto/question-and-answer-option-dto/create-question_answerOP.dto';
 import { CreateQuestionDto } from './dto/question-dto/create-question.dto';
+import nodeCron from 'node-cron';
+import { UUID } from 'crypto';
+import { AgentEvaluation } from 'src/evaluation/entities/evaluation.entity';
+import { appealStatus } from 'src/common/appeal.status';
+import { Appeal } from 'src/appeal/entities/appeal.entity';
+import { audioStatus } from 'src/common/audio.status';
+import { EvaluationService } from 'src/evaluation/evaluation.service';
 
 @Injectable()
 export class GroupQuestionService {
   constructor(
     @InjectRepository(GroupQuestion)
     private readonly groupQuestionRepo: Repository<GroupQuestion>,
+
+    @Inject(forwardRef(() => EvaluationService))
+    private readonly evaluationService: EvaluationService,
 
     private readonly dataSource: DataSource,
   ) { }
@@ -36,7 +46,11 @@ export class GroupQuestionService {
     });
     if (doesActiveExist) {
       // check for end date, if current date exceedes the active group question endsat date, close it
-      const currentDate = new Date();
+      // Use Ethiopia timezone (EAT/UTC+3) for current date
+      const currentDate = new Date(
+        new Date().toLocaleString('en-US', { timeZone: 'Africa/Addis_Ababa' })
+      );
+
       if (currentDate < new Date(doesActiveExist.evaluation_ends_at)) {
         throw new HttpException(
           `You can't create a new group question before the active one is completed. The current active group question "${doesActiveExist.name}" is still ongoing and its evaluation period ends at ${doesActiveExist.evaluation_ends_at}. Please wait until it is closed before creating a new one.`,
@@ -48,10 +62,15 @@ export class GroupQuestionService {
     }
 
     // 2. Check for an existing GroupQuestion for the current month.
-    const currentDate = new Date();
-    currentDate.setMonth(currentDate.getMonth() - 1);
-    const month = currentDate.toLocaleString('en-US', { month: 'short' });
-    const year = currentDate.getFullYear().toString();
+    // Use Ethiopia timezone (EAT/UTC+3) for current date
+    const currentDate = new Date(
+      new Date().toLocaleString('en-US', { timeZone: 'Africa/Addis_Ababa' })
+    );
+    // Set to previous month for group question naming
+    const previousMonthDate = new Date(currentDate);
+    previousMonthDate.setMonth(previousMonthDate.getMonth() - 1);
+    const month = previousMonthDate.toLocaleString('en-US', { month: 'short' });
+    const year = previousMonthDate.getFullYear().toString();
     const groupQuestionName = `${month}/${year}/EP`;
 
     const dayDifference = (createGroupQuestionDto.evaluation_ends_at.getDate() - currentDate.getDate());
@@ -92,10 +111,14 @@ export class GroupQuestionService {
 
     // Create the GroupQuestion entity instance in memory.
     const createdByUserId = createGroupQuestionDto.created_by;
-    const currentDate = new Date();
-    currentDate.setMonth(currentDate.getMonth() - 1);
-    const month = currentDate.toLocaleString('en-US', { month: 'short' });
-    const year = currentDate.getFullYear().toString();
+    const currentDate = new Date(
+      new Date().toLocaleString('en-US', { timeZone: 'Africa/Addis_Ababa' })
+    );
+    // Set to previous month for group question naming
+    const previousMonthDate = new Date(currentDate);
+    previousMonthDate.setMonth(previousMonthDate.getMonth() - 1);
+    const month = previousMonthDate.toLocaleString('en-US', { month: 'short' });
+    const year = previousMonthDate.getFullYear().toString();
     const groupQuestionName = `${month}/${year}/EP`;
 
     let group_question = entityManager.create(GroupQuestion, createGroupQuestionDto);
@@ -157,7 +180,6 @@ export class GroupQuestionService {
         }
       }
     }
-
     return { added, modified };
   }
 
@@ -410,22 +432,35 @@ export class GroupQuestionService {
       // Step 4: Process and save all nested questions and answer options
       await this.processNestedQuestions(entityManager, savedGroupQuestion, createGroupQuestionDto.questions);
 
-      await queryRunner.commitTransaction();
-
       const responseData = {
         ...savedGroupQuestion,
         parent: savedGroupQuestion.parent ? savedGroupQuestion.parent.id : null,
       };
 
+      const { cronJobsMessage, deadline } = this.forceCloseWithCronJobs(savedGroupQuestion.id as UUID, savedGroupQuestion.evaluation_ends_at)
+      console.log(cronJobsMessage);
+
+      await queryRunner.commitTransaction();
+
       return {
         success: true,
-        message: 'Group question created successfully',
+        message: `Group question created successfully. ${cronJobsMessage}`,
+        deadline,
         group_question: responseData
       };
     } catch (error) {
       await queryRunner.rollbackTransaction();
       console.error(error);
-      throw error;
+      if (error instanceof HttpException ||
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException ||
+        error instanceof ConflictException
+      ) {
+        throw error;
+      }
+      else {
+        throw new InternalServerErrorException('Failed to create group question due to an unexpected error.')
+      }
     } finally {
       await queryRunner.release();
     }
@@ -1111,4 +1146,104 @@ export class GroupQuestionService {
       message: `Group question "${activeGroupQuestion.name}" has been successfully closed. All agent evaluations are completed and the evaluation period has ended.`
     }
   }
+
+  // group questionId
+  async forceCloseGroupQuestion(id: UUID) {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    const entityManager = queryRunner.manager;
+    try {
+      const groupQestion = await entityManager.findOne(GroupQuestion, {
+        where: {
+          id: id,
+        },
+        relations: [
+          'agent_evaluation',
+          'agent_evaluation.eval_per_audio',
+          'agent_evaluation.eval_per_audio.appeal',
+        ],
+      });
+      if (!groupQestion) {
+        throw new NotFoundException(`group question with ID "${id}" not found.`);
+      }
+
+      for (const agentEvaluation of groupQestion.agent_evaluation) {
+        if (agentEvaluation.status != agentEvalStatus.CLOSED) {
+          for (const evalPerAudio of agentEvaluation.eval_per_audio) {
+            if (
+              evalPerAudio.appeal != null &&
+              evalPerAudio.appeal.status != appealStatus.CLOSED
+            ) {
+              const appeal = evalPerAudio.appeal;
+              appeal.status = appealStatus.CLOSED;
+              await entityManager.save(Appeal, appeal);
+            }
+            const message = {
+              audio_id: evalPerAudio.audio_id,
+              status: audioStatus.CLOSED,
+            };
+            const { message: audioKafkaMessage } =
+              this.evaluationService.UpdateAudioStatus(message);
+            console.log(audioKafkaMessage);
+          }
+          agentEvaluation.status = agentEvalStatus.CLOSED;
+          await entityManager.save(AgentEvaluation, agentEvaluation);
+        }
+      }
+      groupQestion.status = groupQuestionStatus.CLOSED;
+      await entityManager.save(GroupQuestion, groupQestion);
+
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      console.error('Error in forceClose:', error);
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  // if evaluation ends at reached close all evaluation under this group question using cronjobs
+  forceCloseWithCronJobs(groupQueId: UUID, evalEndsAtDate: Date) {
+    const evalEndDate = new Date(evalEndsAtDate);
+
+    // Extract date components based on the date object's internal timezone (usually UTC/Server Time)
+    const cronMinute = 59
+    const cronHour = 23
+    const cronDay = evalEndDate.getDate();
+    const cronMonth = evalEndDate.getMonth() + 1; // cron months are 1-based
+    const year = evalEndDate.getFullYear()
+    const deadline = `${year}-${String(cronMonth).padStart(2, '0')}-${String(cronDay).padStart(2, '0')} ${String(cronHour).padStart(2, '0')}:${String(cronMinute).padStart(2, '0')} (24hr format) (EAT timezone)`
+
+    // Cron expression to run on the exact date/time *every year*
+    const cronExpression = `${cronMinute} ${cronHour} ${cronDay} ${cronMonth} *`;
+
+    // **Specify the Timezone for Ethiopia (EAT/UTC+3)**
+    const timezone = 'Africa/Addis_Ababa';
+
+    const task = nodeCron.schedule(cronExpression, async () => {
+      console.log(`Executing scheduled force closure for ${groupQueId} (EAT)...`);
+      await this.forceCloseGroupQuestion(groupQueId);
+      task.stop();
+      console.log(`Cron job for ${groupQueId} successfully executed and stopped.`);
+
+    }, {
+      timezone: timezone
+    });
+
+    // Enhance: Provide feedback if cron job scheduling fails or is already scheduled
+    if (!task) {
+      return {
+        deadline,
+        cronJobsMessage: `Failed to schedule automatic closure for group question with ID "${groupQueId}".`
+      };
+    }
+
+    return {
+      deadline,
+      cronJobsMessage: `Scheduled automatic closure for group question with ID "${groupQueId}" at ${deadline} (EAT timezone).`
+    };
+  }
+
 }

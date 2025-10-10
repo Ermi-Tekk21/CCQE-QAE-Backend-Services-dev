@@ -1,9 +1,11 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { GroupQuestionService } from './group-question.service';
 import { CreateGroupQuestionDto } from './dto/group-question-dto/create-group-question.dto';
 import { UpdateGroupQuestionDto } from './dto/group-question-dto/update-group-question.dto';
 import { DeletQueOrAnsOpDto } from './dto/del-que-or-ansop-dto/delet-queOrAnsOp.dto';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
+import { UUID } from 'crypto';
+import { groupQuestionStatus } from 'src/common/group_question.status';
 
 @Controller('group-question')
 export class GroupQuestionController {
@@ -12,6 +14,27 @@ export class GroupQuestionController {
   @Post()
   create(@Body() createGroupQuestionDto: CreateGroupQuestionDto) {
     return this.groupQuestionService.create(createGroupQuestionDto);
+  }
+
+  @Post('force-close-active/:id')
+  async forceClose(@Param('id') id: string) {
+    try {
+      const { groupQuestion: activeGroupQue } = await this.groupQuestionService.getActiveGroupQuestion()
+      if (id !== activeGroupQue?.id) {
+        throw new BadRequestException('Provided id does not match the active group question id.');
+      }
+      if (activeGroupQue.status == groupQuestionStatus.CLOSED) {
+        throw new BadRequestException('Active group question is already closed.');
+      }
+      console.log(activeGroupQue);
+      return this.groupQuestionService.forceCloseGroupQuestion(activeGroupQue?.id as UUID)
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      } else {
+        throw new InternalServerErrorException('An unexpected error occurred while force closing the group question.');
+      }
+    }
   }
 
   @Get()
