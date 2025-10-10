@@ -1,4 +1,4 @@
-import { BadRequestException, HttpException, HttpStatus, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, forwardRef, HttpException, HttpStatus, Inject, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { groupQuestionStatus } from 'src/common/group_question.status';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import { Question } from 'src/group-question/entities/question-entities/question.entity';
@@ -30,6 +30,7 @@ export class GroupQuestionService {
     @InjectRepository(GroupQuestion)
     private readonly groupQuestionRepo: Repository<GroupQuestion>,
 
+    @Inject(forwardRef(() => EvaluationService))
     private readonly evaluationService: EvaluationService,
 
     private readonly dataSource: DataSource,
@@ -1123,7 +1124,7 @@ export class GroupQuestionService {
   }
 
   // group questionId
-  private async forceCloseGroupQuestion(id: UUID) {
+  async forceCloseGroupQuestion(id: UUID) {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -1131,10 +1132,14 @@ export class GroupQuestionService {
     try {
       const groupQestion = await entityManager.findOne(GroupQuestion, {
         where: {
-          id: id
+          id: id,
         },
-        relations: ['agent_evaluation', 'agent_evaluation.eval_per_audio']
-      })
+        relations: [
+          'agent_evaluation',
+          'agent_evaluation.eval_per_audio',
+          'agent_evaluation.eval_per_audio.appeal',
+        ],
+      });
       if (!groupQestion) {
         throw new NotFoundException(`group question with ID "${id}" not found.`);
       }
@@ -1142,48 +1147,72 @@ export class GroupQuestionService {
       for (const agentEvaluation of groupQestion.agent_evaluation) {
         if (agentEvaluation.status != agentEvalStatus.CLOSED) {
           for (const evalPerAudio of agentEvaluation.eval_per_audio) {
-            if (evalPerAudio.appeal != null && evalPerAudio.appeal.status != appealStatus.CLOSED) {
-              const appeal = evalPerAudio.appeal
-              appeal.status = appealStatus.CLOSED
-              await entityManager.save(Appeal, appeal)
+            if (
+              evalPerAudio.appeal != null &&
+              evalPerAudio.appeal.status != appealStatus.CLOSED
+            ) {
+              const appeal = evalPerAudio.appeal;
+              appeal.status = appealStatus.CLOSED;
+              await entityManager.save(Appeal, appeal);
             }
-
             const message = {
               audio_id: evalPerAudio.audio_id,
-              status: audioStatus.CLOSED
-            }
-            const { message: audioKafkaMessage } = this.evaluationService.UpdateAudioStatus(message)
+              status: audioStatus.CLOSED,
+            };
+            const { message: audioKafkaMessage } =
+              this.evaluationService.UpdateAudioStatus(message);
             console.log(audioKafkaMessage);
           }
-          agentEvaluation.status = agentEvalStatus.CLOSED
-          await entityManager.save(AgentEvaluation, agentEvaluation)
+          agentEvaluation.status = agentEvalStatus.CLOSED;
+          await entityManager.save(AgentEvaluation, agentEvaluation);
         }
-        groupQestion.status = groupQuestionStatus.CLOSED
-        await entityManager.save(GroupQuestion, groupQestion)
       }
+      groupQestion.status = groupQuestionStatus.CLOSED;
+      await entityManager.save(GroupQuestion, groupQestion);
 
-
+      await queryRunner.commitTransaction();
     } catch (error) {
       await queryRunner.rollbackTransaction();
       console.error('Error in forceClose:', error);
       throw error;
     } finally {
-      await queryRunner.release()
+      await queryRunner.release();
     }
   }
 
   // if evaluation ends at reached close all evaluation under this group question using cronjobs
   forceCloseWithCronJobs(groupQueId: UUID, evalEndsAtDate: Date) {
-      // Schedule the cron job to run at the exact evaluation end date/time
-      const evalEndDate = new Date(evalEndsAtDate);
-      const cronMinute = evalEndDate.getMinutes();
-      const cronHour = evalEndDate.getHours();
-      const cronDay = evalEndDate.getDate();
-      const cronMonth = evalEndDate.getMonth() + 1; // cron months are 1-based
-      // Run once at the specified date/time
-      const cronExpression = `${cronMinute} ${cronHour} ${cronDay} ${cronMonth} *`;
-      nodeCron.schedule(cronExpression, () => {
-        this.forceCloseGroupQuestion(groupQueId);
-      });
+    // Schedule the cron job to run at the exact evaluation end date/time
+    const evalEndDate = new Date(evalEndsAtDate);
+    const cronMinute = evalEndDate.getMinutes();
+    const cronHour = evalEndDate.getHours();
+    const cronDay = evalEndDate.getDate();
+    const cronMonth = evalEndDate.getMonth() + 1; // cron months are 1-based
+    const cronYear = evalEndDate.getFullYear();
+    // Run once at the specified date/time
+
+    const cronExpression = `${cronMinute} ${cronHour} ${cronDay} ${cronMonth} ${cronYear}`;
+    nodeCron.schedule(cronExpression, () => {
+      this.forceCloseGroupQuestion(groupQueId);
+    });
   }
+
+  testCron() {
+    const now = new Date();
+    const runAt = new Date(now.getTime() + 3 * 60000); // 2 minutes from now
+    const cronMinute = runAt.getMinutes();
+    const cronHour = runAt.getHours();
+    const cronDay = runAt.getDate();
+    const cronMonth = runAt.getMonth() + 1; // cron months are 1-based
+    // To run at 10:15 AM on July 5th of this year only (not every year), include the current year in the cron expression:
+    const cronYear = runAt.getFullYear();
+    const cronExpression = `${cronMinute} ${cronHour} ${cronDay} ${cronMonth} * ${cronYear}`;
+    console.log(`${cronMinute} ${cronHour} ${cronDay} ${cronMonth} *`);
+
+    nodeCron.schedule(cronExpression, () => {
+      console.log('Hello World...');
+      console.log("excuted at ", new Date().getMinutes());
+    });
+  }
+
 }

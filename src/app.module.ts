@@ -9,21 +9,19 @@ import { CatagoryModule } from './catagory/catagory.module';
 import { AnswerOptionLookupModule } from './answer-option-lookup/answer-option-lookup.module';
 import { QuestionLookupModule } from './question-lookup/question-lookup.module';
 import { GroupQuestionModule } from './group-question/group-question.module';
-import { VersionChangesDetail } from './group-question/entities/version-changes-detail.entity';
 import { AppealModule } from './appeal/appeal.module';
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true }),
-    TypeOrmModule.forRoot(typeOrmConfig),
+  TypeOrmModule.forRoot(typeOrmConfig),
     EvaluationModule,
     CatagoryModule,
     AnswerOptionLookupModule,
     QuestionLookupModule,
     GroupQuestionModule,
-    VersionChangesDetail,
     AppealModule
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }
