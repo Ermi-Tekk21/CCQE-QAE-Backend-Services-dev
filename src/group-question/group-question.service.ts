@@ -110,7 +110,7 @@ export class GroupQuestionService {
     }
 
     // Create the GroupQuestion entity instance in memory.
-    const createdByUserId = createGroupQuestionDto.created_by;
+    // const createdByUserId = createGroupQuestionDto.created_by;
     const currentDate = new Date(
       new Date().toLocaleString('en-US', { timeZone: 'Africa/Addis_Ababa' })
     );
@@ -124,7 +124,7 @@ export class GroupQuestionService {
     let group_question = entityManager.create(GroupQuestion, createGroupQuestionDto);
     group_question.name = groupQuestionName;
     group_question.status = groupQuestionStatus.DRAFT;
-    group_question.created_by = createdByUserId;
+    // group_question.created_by = createdByUserId;
     group_question.evaluation_ends_at = createGroupQuestionDto.evaluation_ends_at;
     group_question.version = (Number(max.max || 0) + 0.1).toFixed(1);
     group_question.weight = sumOfQuestionWeights;
@@ -1103,6 +1103,25 @@ export class GroupQuestionService {
     return {
       groupQuestion
     }
+  }
+
+  async getCurrentGroupQue() {
+    const currentDate = new Date(
+      new Date().toLocaleString('en-US', { timeZone: 'Africa/Addis_Ababa' })
+    );
+
+    const previousMonthDate = new Date(currentDate);
+    previousMonthDate.setMonth(previousMonthDate.getMonth() - 1);
+    const month = previousMonthDate.toLocaleString('en-US', { month: 'short' });
+    const year = previousMonthDate.getFullYear().toString();
+    const groupQuestionName = `${month}/${year}/EP`;
+
+    const groupQestion = await this.groupQuestionRepo.findOne({
+      where: {
+        name: groupQuestionName
+      }
+    })
+    return groupQestion
   }
 
   async close() {
