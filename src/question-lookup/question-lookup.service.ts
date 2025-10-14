@@ -3,7 +3,7 @@ import { CreateQuestionLookupDto } from './dto/create-question-lookup.dto';
 import { UpdateQuestionLookupDto } from './dto/update-question-lookup.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { QuestionLookup } from './entities/question-lookup.entity';
-import { Repository } from 'typeorm';
+import { ILike, Repository } from 'typeorm';
 import { paginate } from 'src/utils/paginate';
 import { Catagory } from 'src/catagory/entities/catagory.entity';
 
@@ -52,16 +52,46 @@ export class QuestionLookupService {
         }
     }
 
-    async findAll(page: number, limit: number, sortOrder: 'asc' | 'desc' = 'desc') {
+    async findAll(params: {
+        page: number,
+        limit: number,
+        catagory: string,
+        search: string,
+        sortOrder: 'asc' | 'desc'
+    }) {
+        const {
+            page,
+            limit,
+            catagory,
+            sortOrder = 'desc',
+            search
+        } = params;
+
+        const baseConditions: any = {};
+        if (catagory) {
+            const categoryEntity = await this.catagoryRepo.findOne({ where: { name: catagory } });
+            // If the category is not found, we'll pass a non-existent ID to ensure no results are returned.
+            const categoryId = categoryEntity ? categoryEntity.id : '00000000-0000-0000-0000-000000000000';
+            baseConditions.catagory = { id: categoryId };
+        }
+
+        let where: any = baseConditions;
+
+        if (search) {
+            where = { ...baseConditions, content: ILike(`%${search}%`) };
+        }
+
         const paginatedQuestions = await paginate(this.questionLookupRepo, page, limit, {
             relations: ['catagory'],
-            order: { created_at: sortOrder }
-        })
+            order: { created_at: sortOrder },
+            where,
+        });
+
         return {
             success: true,
             questions: paginatedQuestions.data,
             meta: paginatedQuestions.meta
-        }
+        };
     }
 
     async findOne(id: string) {

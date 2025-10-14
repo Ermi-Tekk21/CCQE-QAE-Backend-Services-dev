@@ -15,9 +15,15 @@ export class QuestionLookupController {
 
     @Get('fetch-all')
     findAll(@Query() pagination: PaginationDto) {
-        const { page, limit, sort_order } = pagination;
+        const { page, limit, sort_order, catagory, search } = pagination;
 
-        return this.questionLookupService.findAll(page, limit, sort_order as 'asc' | 'desc');
+        return this.questionLookupService.findAll({
+            page,
+            limit,
+            catagory,
+            search,
+            sortOrder: sort_order as 'asc' | 'desc'
+        });
     }
 
     @Get(':id')
