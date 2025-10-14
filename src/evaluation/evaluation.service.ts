@@ -218,7 +218,7 @@ export class EvaluationService {
     try {
       const evaluation = await entityManager.findOne(AgentEvaluation, {
         where: { agent_assignment_id: id },
-        relations: ['group_question', 'eval_per_audio', 'eval_per_audio.eval_per_question', 'eval_per_audio.eval_per_question.question_answerOp', 'eval_per_audio.eval_per_question.question_answerOp.answer_option_lookup', 'eval_per_audio.eval_per_question.question', 'eval_per_audio.eval_per_question.question.question_lookup']
+        relations: ['group_question', 'eval_per_audio', 'eval_per_audio.eval_per_question', 'eval_per_audio.eval_per_question.question_answerOp', 'eval_per_audio.eval_per_question.question_answerOp.answer_option_lookup', 'eval_per_audio.eval_per_question.question', 'eval_per_audio.eval_per_question.question.question_lookup', 'complain']
       })
       if (!evaluation) {
         throw new NotFoundException(`evaluation with assignment id ${id} not found`)

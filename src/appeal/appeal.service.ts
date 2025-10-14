@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Inject, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, forwardRef, Inject, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { CreateAppealDto } from './dto/create-appeal.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Appeal } from './entities/appeal.entity';
@@ -11,6 +11,9 @@ import { AppealComplain } from './entities/appealComplain.entity';
 import { AgentEvaluation } from 'src/evaluation/entities/evaluation.entity';
 import { agentEvalStatus } from 'src/common/agent_evaluation.status';
 import { ClientKafka } from '@nestjs/microservices';
+import { ConfirmDto } from './dto/confirm.eval.dto';
+import { audioStatus } from 'src/common/audio.status';
+import { EvaluationService } from 'src/evaluation/evaluation.service';
 
 @Injectable()
 export class AppealService {
@@ -20,6 +23,9 @@ export class AppealService {
 
     @Inject('KAFKA_SERVICE')
     private readonly kafkaClient: ClientKafka,
+
+    @Inject(forwardRef(() => EvaluationService))
+    private readonly evaluationService: EvaluationService,
 
     private readonly datasource: DataSource,
   ) { }
@@ -526,5 +532,61 @@ export class AppealService {
   notifyAgentOfRejectedAppeal(message: { assignmentId: string, appeal: Appeal }) {
     this.kafkaClient.emit('notify_agent_appeal_rejection', message);
     return { message: `An appeal with ID ${message.appeal.id} for assignment ${message.assignmentId} has been rejected by the admin. The appeal rejection has been successfully produced to the UMS service to notify the agent.` };
+  }
+
+  async confirm(id: string, confirmDto: ConfirmDto) {
+    const queryRunner = this.datasource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    const entityManager: EntityManager = queryRunner.manager;
+    try {
+      const agentEval = await entityManager.findOne(AgentEvaluation, {
+        where: {
+          id: id
+        }
+      })
+      if (!agentEval) {
+        throw new NotFoundException(`Agent evaluation with id ${id} not found.`);
+      }
+
+      const audioIds: string[] = []
+      for (const audioEvalId of confirmDto.audio_evaluation_ids) {
+        const audioEvaluation = await entityManager.findOne(EvalPerAudio, {
+          where: {
+            id: audioEvalId
+          }, relations: ['agent_evaluation']
+        })
+        if (!audioEvaluation) {
+          throw new NotFoundException(`Audio evaluation with id ${audioEvalId} not found.`);
+        }
+        if (audioEvaluation.agent_evaluation.id !== agentEval.id) {
+          throw new ConflictException(`Audio evaluation with id ${audioEvalId} does not belong to agent evaluation with id ${id}. Please ensure all audio evaluation IDs belong to the specified agent evaluation before confirming.`);
+        }
+        audioIds.push(audioEvaluation.audio_id)
+      }
+
+      for (const audioId of audioIds) {
+        const message = {
+          audio_id: audioId,
+          status: audioStatus.CLOSED
+        }
+        const { message: audioKafkaMessage } = this.evaluationService.UpdateAudioStatus(message)
+        console.log(audioKafkaMessage);
+        console.log(message);
+      }
+      return {
+        success: true,
+        message: "Audio evaluations have been successfully confirmed and their statuses updated to CLOSED.",
+      }
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof ConflictException) {
+        throw error
+      } else {
+        console.error(error);
+        throw new InternalServerErrorException("An unexpected error occurred while confirming audio evaluations: " + (error?.message || error));
+      }
+    } finally {
+      await queryRunner.release()
+    }
   }
 }

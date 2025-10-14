@@ -4,6 +4,7 @@ import { CreateAppealDto } from './dto/create-appeal.dto';
 import { UpdateAppealDto } from './dto/update-appeal.dto';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
 import { appealStatus } from 'src/common/appeal.status';
+import { ConfirmDto } from './dto/confirm.eval.dto';
 
 @Controller('appeal')
 export class AppealController {
@@ -17,13 +18,17 @@ export class AppealController {
     return this.appealService.create(id, createAppealDto);
   }
 
+  @Post('agent-evaluation/:id/confirm-audios')
+  confirm(@Body() confirmDto: ConfirmDto, @Param('id') id: string) {
+    return this.appealService.confirm(id, confirmDto)
+  }
+
   @Get()
   findAll(
     @Query() pagination: PaginationDto,
     @Query('status') status: appealStatus,
   ) {
     const { page, limit, sort_order } = pagination;
-
     return this.appealService.findAll(page, limit, status, sort_order as 'ASC' | 'DESC');
   }
 
