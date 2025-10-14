@@ -6,7 +6,7 @@ import { DataSource, EntityManager, Repository } from 'typeorm';
 import { UpdateAppealDto } from './dto/update-appeal.dto';
 import { EvalPerAudio } from 'src/evaluation/entities/evaluationPerAudio.entity';
 import { appealStatus } from 'src/common/appeal.status';
-import { paginate } from 'src/common/utils/paginate';
+import { paginate } from 'src/utils/paginate';
 import { AppealComplain } from './entities/appealComplain.entity';
 import { AgentEvaluation } from 'src/evaluation/entities/evaluation.entity';
 import { agentEvalStatus } from 'src/common/agent_evaluation.status';

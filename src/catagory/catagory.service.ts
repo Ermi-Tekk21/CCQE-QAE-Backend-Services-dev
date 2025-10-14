@@ -4,7 +4,7 @@ import { UpdateCatagoryDto } from './dto/update-catagory.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Catagory } from './entities/catagory.entity';
 import { Repository } from 'typeorm';
-import { paginate } from 'src/common/utils/paginate';
+import { paginate } from 'src/utils/paginate';
 import { QuestionLookup } from 'src/question-lookup/entities/question-lookup.entity';
 
 @Injectable()

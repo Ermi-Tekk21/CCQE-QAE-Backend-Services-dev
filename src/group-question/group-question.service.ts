@@ -12,7 +12,7 @@ import { UpdateGroupQuestionDto } from './dto/group-question-dto/update-group-qu
 import { CreateGroupQuestionDto } from './dto/group-question-dto/create-group-question.dto';
 import { DeletQueOrAnsOpDto } from './dto/del-que-or-ansop-dto/delet-queOrAnsOp.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { paginate } from 'src/common/utils/paginate';
+import { paginate } from 'src/utils/paginate';
 import { agentEvalStatus } from 'src/common/agent_evaluation.status';
 import { CreateQuestionAnswerOPDto } from './dto/question-and-answer-option-dto/create-question_answerOP.dto';
 import { CreateQuestionDto } from './dto/question-dto/create-question.dto';

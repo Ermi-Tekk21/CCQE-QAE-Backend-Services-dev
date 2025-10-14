@@ -12,7 +12,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { agentEvalStatus } from 'src/common/agent_evaluation.status';
 import { appealStatus } from 'src/common/appeal.status';
 import { GroupQuestionService } from 'src/group-question/group-question.service';
-import { paginate } from 'src/common/utils/paginate';
+import { paginate } from 'src/utils/paginate';
 import { ClientKafka } from '@nestjs/microservices';
 import { audioStatus } from 'src/common/audio.status';
 import { AppealService } from 'src/appeal/appeal.service';
