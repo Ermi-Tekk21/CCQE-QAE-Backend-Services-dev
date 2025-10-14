@@ -14,6 +14,7 @@ import { ClientKafka } from '@nestjs/microservices';
 import { ConfirmDto } from './dto/confirm.eval.dto';
 import { audioStatus } from 'src/common/audio.status';
 import { EvaluationService } from 'src/evaluation/evaluation.service';
+import { RejectionAppealDto } from './dto/rejection.appeal.dto';
 
 @Injectable()
 export class AppealService {
@@ -452,7 +453,7 @@ export class AppealService {
   }
 
   // should be performed by admin
-  async rejectAppeal(id: string) {
+  async rejectAppeal(id: string, rejectionAppealDto: RejectionAppealDto) {
     try {
       const { appeal } = await this.findOne(id)
       if (appeal.status !== appealStatus.DRAFT) {
@@ -460,6 +461,7 @@ export class AppealService {
       }
       appeal.status = appealStatus.CLOSED
       appeal.is_rejected = true
+      appeal.rejection_reason = rejectionAppealDto.rejection_reason
       await this.appealRepo.save(appeal)
 
       // produce kafka for notifing the agent

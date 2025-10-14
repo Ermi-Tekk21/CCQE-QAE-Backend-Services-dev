@@ -17,6 +17,9 @@ export class Appeal {
     @Column({ default: false })
     is_rejected: boolean
 
+    @Column({ type: "text", default: null, nullable: true })
+    rejection_reason: string | null
+
     @Column({ default: false })
     is_accepted: boolean
 

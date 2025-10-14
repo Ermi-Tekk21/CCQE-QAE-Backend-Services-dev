@@ -5,6 +5,7 @@ import { UpdateAppealDto } from './dto/update-appeal.dto';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
 import { appealStatus } from 'src/common/appeal.status';
 import { ConfirmDto } from './dto/confirm.eval.dto';
+import { RejectionAppealDto } from './dto/rejection.appeal.dto';
 
 @Controller('appeal')
 export class AppealController {
@@ -67,8 +68,8 @@ export class AppealController {
   }
 
   @Patch('reject/:id')
-  rejectAppeal(@Param('id') id: string) {
-    return this.appealService.rejectAppeal(id);
+  rejectAppeal(@Param('id') id: string, @Body() rejectionAppealDto: RejectionAppealDto) {
+    return this.appealService.rejectAppeal(id, rejectionAppealDto);
   }
 
   @Patch('close/:id')
