@@ -52,7 +52,7 @@ export class QuestionLookupService {
         }
     }
 
-    async findAll(page: number, limit: number, sortOrder: 'ASC' | 'DESC' = 'DESC') {
+    async findAll(page: number, limit: number, sortOrder: 'asc' | 'desc' = 'desc') {
         const paginatedQuestions = await paginate(this.questionLookupRepo, page, limit, {
             relations: ['catagory'],
             order: { created_at: sortOrder }

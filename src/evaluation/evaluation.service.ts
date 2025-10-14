@@ -160,7 +160,7 @@ export class EvaluationService {
     }
   }
 
-  async findAll(page: number, limit: number, sortOrder: 'ASC' | 'DESC' = 'DESC') {
+  async findAll(page: number, limit: number, sortOrder: 'asc' | 'desc' = 'desc') {
     try {
       const paginatedEvaluations = await paginate(
         this.agentEvaluationRepo,

@@ -1,5 +1,5 @@
 import { IsOptional, IsInt, Min, IsString, IsIn } from 'class-validator';
-import { Type, Transform } from 'class-transformer';
+import { Type } from 'class-transformer';
 
 export class PaginationDto {
   @IsOptional()
@@ -20,9 +20,18 @@ export class PaginationDto {
   status: string;
 
   @IsOptional()
-  @Transform(({ value }) => value.replace(/['"]/g, ''))
   @Type(() => String)
   @IsString()
-  @IsIn(["ASC", "DESC"], { message: 'sort must be either ASC or DESC' })
+  @IsIn(["asc", "desc"], { message: 'sort must be either asc or desc' })
   sort_order: string;
+
+  @IsOptional()
+  @Type(() => String)
+  @IsString()
+  catagory: string;
+
+  @IsOptional()
+  @Type(() => String)
+  @IsString()
+  search: string;
 }

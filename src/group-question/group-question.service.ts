@@ -466,7 +466,7 @@ export class GroupQuestionService {
     }
   }
 
-  async findAll(page: number, limit: number, sortOrder: 'ASC' | 'DESC' = 'DESC'): Promise<{
+  async findAll(page: number, limit: number, sortOrder: 'asc' | 'desc' = 'desc'): Promise<{
     success: boolean,
     "group questions": GroupQuestion[],
     meta: {}

@@ -30,7 +30,7 @@ export class AppealController {
     @Query('status') status: appealStatus,
   ) {
     const { page, limit, sort_order } = pagination;
-    return this.appealService.findAll(page, limit, status, sort_order as 'ASC' | 'DESC');
+    return this.appealService.findAll(page, limit, status, sort_order as 'asc' | 'desc');
   }
 
   @Get(':id')
@@ -43,7 +43,7 @@ export class AppealController {
     @Param('id') id: string,
     @Query() pagination: PaginationDto) {
     const { sort_order } = pagination;
-    return this.appealService.findAppealsPerAgentEvaluationId(id, sort_order as 'ASC' | 'DESC');
+    return this.appealService.findAppealsPerAgentEvaluationId(id, sort_order as 'asc' | 'desc');
   }
 
   @Put('agent-evaluation/:id')

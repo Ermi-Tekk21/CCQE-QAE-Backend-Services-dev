@@ -112,7 +112,7 @@ export class AppealService {
     }
   }
 
-  async findAll(page: number, limit: number, status: appealStatus, sortOrder: 'ASC' | 'DESC' = 'DESC') {
+  async findAll(page: number, limit: number, status: appealStatus, sortOrder: 'asc' | 'desc' = 'desc') {
     try {
       const where: any = {};
       if (status) {
@@ -137,7 +137,7 @@ export class AppealService {
   }
 
   // agent-evaluation id
-  async findAppealsPerAgentEvaluationId(id: string, sortOrder: 'ASC' | 'DESC' = 'DESC') {
+  async findAppealsPerAgentEvaluationId(id: string, sortOrder: 'asc' | 'desc' = 'desc') {
     try {
       const appeals = await this.appealRepo.find({
         where: {

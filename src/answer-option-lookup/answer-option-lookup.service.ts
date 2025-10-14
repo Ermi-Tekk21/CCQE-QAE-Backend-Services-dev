@@ -38,7 +38,7 @@ export class AnswerOptionLookupService {
         }
     }
 
-    async findAll(page: number, limit: number, sortOrder: 'ASC' | 'DESC' = 'DESC') {
+    async findAll(page: number, limit: number, sortOrder: 'asc' | 'desc' = 'desc') {
         const paginatedAnsOPs = await paginate(this.answerOptionLookupRepo, page, limit, {
             order: { created_at: sortOrder }
         })

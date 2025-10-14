@@ -40,7 +40,7 @@ export class CatagoryService {
     }
   }
 
-  async findAll(page: number, limit: number, sortOrder: 'ASC' | 'DESC' = 'DESC') {
+  async findAll(page: number, limit: number, sortOrder: 'asc' | 'desc' = 'desc') {
     try {
       const paginatedCatagories = await paginate(this.catagoryRepo, page, limit, {
         order: { created_at: sortOrder },
@@ -80,7 +80,7 @@ export class CatagoryService {
     }
   }
 
-  async getAllQuesPerCatagory(id: string, page: number, limit: number, sortOrder: 'ASC' | 'DESC' = 'DESC') {
+  async getAllQuesPerCatagory(id: string, page: number, limit: number, sortOrder: 'asc' | 'desc' = 'desc') {
     const paginatedQuestions = await paginate(this.questionLookupRepo, page, limit, {
       where: {
         catagory: {

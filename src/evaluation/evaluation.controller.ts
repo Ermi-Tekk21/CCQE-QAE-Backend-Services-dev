@@ -17,7 +17,7 @@ export class EvaluationController {
   findAll(@Query() pagination: PaginationDto) {
     const { page, limit, sort_order } = pagination;
 
-    return this.evaluationService.findAll(page, limit, sort_order as 'ASC' | 'DESC');
+    return this.evaluationService.findAll(page, limit, sort_order as 'asc' | 'desc');
   }
 
   @Get(':id')
