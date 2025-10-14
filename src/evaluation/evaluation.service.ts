@@ -1,7 +1,7 @@
 import { BadRequestException, Inject, Injectable, InternalServerErrorException, NotAcceptableException, NotFoundException } from '@nestjs/common';
 import { CreateEvaluationDto } from './dto/agent-evaluation-dto/create-evaluation.dto';
 import { UpdateEvaluationDto } from './dto/agent-evaluation-dto/update-evaluation.dto';
-import { DataSource, EntityManager, Repository } from 'typeorm';
+import { DataSource, EntityManager, Like, Repository } from 'typeorm';
 import { GroupQuestion } from 'src/group-question/entities/group-question-entities/group-question.entity';
 import { AgentEvaluation } from './entities/evaluation.entity';
 import { EvalPerAudio } from './entities/evaluationPerAudio.entity';
@@ -121,24 +121,24 @@ export class EvaluationService {
       await entityManager.save(AgentEvaluation, createdAgentEvaluation);
       await entityManager.queryRunner?.commitTransaction()
 
-      // produce kafka for each audio to update audio status at audio service
-      for (const audio of audios) {
-        const message = {
-          audio_id: audio.audio_id,
-          status: audioStatus.OPENED
-        }
-        const { message: audioKafkaMessage } = this.UpdateAudioStatus(message)
-        console.log(audioKafkaMessage);
-      }
+      // // produce kafka for each audio to update audio status at audio service
+      // for (const audio of audios) {
+      //   const message = {
+      //     audio_id: audio.audio_id,
+      //     status: audioStatus.OPENED
+      //   }
+      //   const { message: audioKafkaMessage } = this.UpdateAudioStatus(message)
+      //   console.log(audioKafkaMessage);
+      // }
 
 
-      // produce kafka for notifing the evaluated agent
-      const notifyMessage = {
-        assignmentId: agent_assignment_id,
-        evaluation: createdAgentEvaluation
-      }
-      const { message: notifyKafkaMessage } = this.notifyAgentEval(notifyMessage)
-      console.log(notifyKafkaMessage);
+      // // produce kafka for notifing the evaluated agent
+      // const notifyMessage = {
+      //   assignmentId: agent_assignment_id,
+      //   evaluation: createdAgentEvaluation
+      // }
+      // const { message: notifyKafkaMessage } = this.notifyAgentEval(notifyMessage)
+      // console.log(notifyKafkaMessage);
 
       return {
         success: true,
@@ -160,15 +160,25 @@ export class EvaluationService {
     }
   }
 
-  async findAll(page: number, limit: number, sortOrder: 'asc' | 'desc' = 'desc') {
+  async findAll(page: number, limit: number, month: string, year: string, sortOrder: 'asc' | 'desc' = 'desc') {
     try {
+      const where: any = {};
+      if (year && month) {
+        where.year_month = `${year}-${month}`;
+      } else if (year) {
+        where.year_month = Like(`${year}-%`);
+      } else if (month) {
+        where.year_month = `${month}`;
+      }
+
       const paginatedEvaluations = await paginate(
         this.agentEvaluationRepo,
         page,
         limit,
         {
           relations: ['group_question', 'eval_per_audio', 'eval_per_audio.eval_per_question', 'eval_per_audio.eval_per_question.question_answerOp', 'eval_per_audio.eval_per_question.question'],
-          order: { created_at: sortOrder }
+          order: { created_at: sortOrder },
+          where
         }
       );
       return {
@@ -210,14 +220,23 @@ export class EvaluationService {
     }
   }
 
-  async findOneByAssignmentId(id: string) {
+  async findOneByAssignmentId(id: string, month: string, year: string) {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
     const entityManager: EntityManager = queryRunner.manager;
     try {
+      const where: any = { agent_assignment_id: id };
+      if (year && month) {
+        where.year_month = `${year}-${month}`;
+      } else if (year) {
+        where.year_month = Like(`${year}-%`);
+      } else if (month) {
+        where.year_month = `${month}`;
+      }
+
       const evaluation = await entityManager.findOne(AgentEvaluation, {
-        where: { agent_assignment_id: id },
+        where,
         relations: ['group_question', 'eval_per_audio', 'eval_per_audio.eval_per_question', 'eval_per_audio.eval_per_question.question_answerOp', 'eval_per_audio.eval_per_question.question_answerOp.answer_option_lookup', 'eval_per_audio.eval_per_question.question', 'eval_per_audio.eval_per_question.question.question_lookup', 'complain']
       })
       if (!evaluation) {

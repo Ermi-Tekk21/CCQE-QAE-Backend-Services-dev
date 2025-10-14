@@ -33,5 +33,15 @@ export class PaginationDto {
   @IsOptional()
   @Type(() => String)
   @IsString()
+  month: string;
+
+  @IsOptional()
+  @Type(() => String)
+  @IsString()
+  year: string;
+
+  @IsOptional()
+  @Type(() => String)
+  @IsString()
   search: string;
 }

@@ -1,6 +1,6 @@
 import { agentEvalStatus } from "src/common/agent_evaluation.status";
 import { GroupQuestion } from "src/group-question/entities/group-question-entities/group-question.entity";
-import { Column, CreateDateColumn, DeleteDateColumn, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { BeforeInsert, Column, CreateDateColumn, DeleteDateColumn, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { EvalPerAudio } from "./evaluationPerAudio.entity";
 import { AppealComplain } from "src/appeal/entities/appealComplain.entity";
 
@@ -9,8 +9,23 @@ export class AgentEvaluation {
     @PrimaryGeneratedColumn("uuid")
     id: string
 
-    @Column({ type: "uuid", unique: true })
+    @Column({ type: "uuid" })
     agent_assignment_id: string
+
+    @Column()
+    year_month: string
+
+    @BeforeInsert()
+    setPreviousMonth() {
+        const date = new Date(
+            new Date().toLocaleString('en-US', { timeZone: 'Africa/Addis_Ababa' })
+        );
+        date.setDate(1);
+        date.setMonth(date.getMonth() - 1);
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        this.year_month = `${year}-${month}`;
+    }
 
     @Column({ type: "float", nullable: true })
     result: number | true
