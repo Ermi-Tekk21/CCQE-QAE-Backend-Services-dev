@@ -5,7 +5,7 @@ import { Type } from 'class-transformer';
 import { UpdateQuestionDto } from 'src/group-question/dto/question-dto/update-question.dto';
 
 export class UpdateGroupQuestionDto extends PartialType(
-    OmitType(CreateGroupQuestionDto, ['created_by', 'questions'])
+    OmitType(CreateGroupQuestionDto, ['questions'])
 ) {
     @IsUUID()
     updated_by: string;
