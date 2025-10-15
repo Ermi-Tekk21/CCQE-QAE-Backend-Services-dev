@@ -176,7 +176,7 @@ export class EvaluationService {
         page,
         limit,
         {
-          relations: ['group_question', 'eval_per_audio', 'eval_per_audio.eval_per_question', 'eval_per_audio.eval_per_question.question_answerOp', 'eval_per_audio.eval_per_question.question'],
+          relations: ['group_question', 'eval_per_audio', 'eval_per_audio.appeal', 'eval_per_audio.eval_per_question', 'eval_per_audio.eval_per_question.question_answerOp', 'eval_per_audio.eval_per_question.question'],
           order: { created_at: sortOrder },
           where
         }
@@ -200,7 +200,7 @@ export class EvaluationService {
     try {
       const res = await entityManager.findOne(AgentEvaluation, {
         where: { id },
-        relations: ['group_question', 'eval_per_audio', 'eval_per_audio.eval_per_question', 'eval_per_audio.eval_per_question.question_answerOp', 'eval_per_audio.eval_per_question.question']
+        relations: ['group_question', 'eval_per_audio', 'eval_per_audio.appeal', 'eval_per_audio.eval_per_question', 'eval_per_audio.eval_per_question.question_answerOp', 'eval_per_audio.eval_per_question.question']
       })
       if (!res) {
         throw new NotFoundException(`evaluation with id ${id} not found`)
@@ -237,7 +237,7 @@ export class EvaluationService {
 
       const evaluation = await entityManager.findOne(AgentEvaluation, {
         where,
-        relations: ['group_question', 'eval_per_audio', 'eval_per_audio.eval_per_question', 'eval_per_audio.eval_per_question.question_answerOp', 'eval_per_audio.eval_per_question.question_answerOp.answer_option_lookup', 'eval_per_audio.eval_per_question.question', 'eval_per_audio.eval_per_question.question.question_lookup', 'complain']
+        relations: ['group_question', 'eval_per_audio', 'eval_per_audio.appeal', 'eval_per_audio.eval_per_question', 'eval_per_audio.eval_per_question.question_answerOp', 'eval_per_audio.eval_per_question.question_answerOp.answer_option_lookup', 'eval_per_audio.eval_per_question.question', 'eval_per_audio.eval_per_question.question.question_lookup', 'complain']
       })
       if (!evaluation) {
         throw new NotFoundException(`evaluation with assignment id ${id} not found`)
@@ -311,6 +311,10 @@ export class EvaluationService {
         evalPerAudio.result = newAudioResult
         if (evalPerAudio.appeal !== null) {
           isAppealUpdate = true;
+          // should throw bad request exception if new_result < intial_result
+          if (newAudioResult < intialResult) {
+            throw new BadRequestException(`Cannot decrease the evaluation result for audio evaluation ID ${updateAudioEvaluationDto.audio_evaluation_id} after an appeal. The updated result must be equal to or greater than the initial result.`);
+          }
           await this.closeAppeal(evalPerAudio, intialResult, newAudioResult)
         }
 

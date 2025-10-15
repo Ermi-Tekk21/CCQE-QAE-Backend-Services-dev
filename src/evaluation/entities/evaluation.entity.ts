@@ -38,6 +38,9 @@ export class AgentEvaluation {
     status: agentEvalStatus
 
     @Column({ default: false })
+    is_appealed: boolean
+
+    @Column({ default: false })
     is_deleted: boolean
 
     @Column({ type: "uuid", nullable: true })

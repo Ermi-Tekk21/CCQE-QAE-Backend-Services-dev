@@ -22,6 +22,9 @@ export class AppealService {
     @InjectRepository(Appeal)
     private readonly appealRepo: Repository<Appeal>,
 
+    @InjectRepository(AgentEvaluation)
+    private readonly agentEvaluation: Repository<AgentEvaluation>,
+
     @Inject('KAFKA_SERVICE')
     private readonly kafkaClient: ClientKafka,
 
@@ -52,6 +55,7 @@ export class AppealService {
       await entityManager.save(AppealComplain, newComplain)
 
       agentEvaluation.complain = newComplain
+      agentEvaluation.is_appealed = true
       await entityManager.save(AgentEvaluation, agentEvaluation)
 
       for (const audioEvalId of createAppealDto.audio_evaluation_ids) {
@@ -313,6 +317,45 @@ export class AppealService {
     return agentEval;
   }
 
+  private async refreshIsAppealedEvaluation(agentEval: AgentEvaluation) {
+    const queryRunner = this.datasource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    const entityManager: EntityManager = queryRunner.manager;
+    try {
+      // Reload the entity within the transaction to ensure we have the latest data and relations
+      const freshAgentEval = await entityManager.findOne(AgentEvaluation, {
+        where: { id: agentEval.id },
+        relations: ['eval_per_audio', 'eval_per_audio.appeal']
+      });
+
+      if (!freshAgentEval) {
+        console.warn(`AgentEvaluation with id ${agentEval.id} not found during refresh.`);
+        await queryRunner.commitTransaction();
+        return;
+      }
+
+      // Check if there are any appeals that are not closed. This correctly handles setting the flag back to false.
+      const hasOpenAppeals = freshAgentEval.eval_per_audio.some(
+        evalPerAudio => evalPerAudio.appeal != null && evalPerAudio.appeal.status !== appealStatus.CLOSED
+      );
+
+      freshAgentEval.is_appealed = hasOpenAppeals;
+      await entityManager.save(AgentEvaluation, freshAgentEval);
+
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      console.error(`Error in refreshIsAppealedEvaluation for agentEval ${agentEval.id}:`, error);
+      if (queryRunner.isTransactionActive) {
+        await queryRunner.rollbackTransaction();
+      }
+      // Re-throwing is better so the caller knows something failed.
+      throw new InternalServerErrorException(`Failed to refresh appeal status for evaluation ${agentEval.id}.`);
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
   // specific audio appeal id
   async remove(id: string) {
     const queryRunner = this.datasource.createQueryRunner();
@@ -437,6 +480,17 @@ export class AppealService {
       const { message: notifyKafkaMessage } = this.notifyEvaluatorOfAcceptedAppeal(notifyMessage)
       console.log(notifyKafkaMessage);
 
+      // appeal.evaluation_per_audio.agent_evaluation.id
+      const agentEval = await this.agentEvaluation.findOne({
+        where: {
+          id: appeal.evaluation_per_audio.agent_evaluation.id
+        }, relations: ['eval_per_audio', 'eval_per_audio.appeal']
+      })
+
+      if (agentEval) {
+        this.refreshIsAppealedEvaluation(agentEval)
+      }
+
       return {
         success: true,
         message: `appeal with id ${id} status is successfully changed to ${appeal.status}`,
@@ -464,6 +518,17 @@ export class AppealService {
       appeal.rejection_reason = rejectionAppealDto.rejection_reason
       await this.appealRepo.save(appeal)
 
+      // appeal.evaluation_per_audio.agent_evaluation.id
+      const agentEval = await this.agentEvaluation.findOne({
+        where: {
+          id: appeal.evaluation_per_audio.agent_evaluation.id
+        }, relations: ['eval_per_audio', 'eval_per_audio.appeal']
+      })
+
+      if (agentEval) {
+        this.refreshIsAppealedEvaluation(agentEval)
+      }
+
       // produce kafka for notifing the agent
       const notifyMessage = {
         assignmentId: appeal.evaluation_per_audio.agent_evaluation.agent_assignment_id,
@@ -490,33 +555,48 @@ export class AppealService {
   // should be performed by evaluator
   async closeAppeal(id: string, changes: { from: number, to: number }) {
     try {
-      const { appeal } = await this.findOne(id)
+      const { appeal } = await this.findOne(id);
       if (appeal.status !== appealStatus.UNDER_REVIEW) {
-        throw new ConflictException('this specified appeal status should be underreview to be closed.')
+        throw new ConflictException('This specified appeal status should be under review to be closed.');
       }
 
-      appeal.changes = changes
-      appeal.status = appealStatus.CLOSED
-      await this.appealRepo.save(appeal)
+      appeal.changes = changes;
+      appeal.status = appealStatus.CLOSED;
+      await this.appealRepo.save(appeal);
 
-      // find agentevaluation here then if no appeal under it close agent evaluation
-      const agentEval = appeal.evaluation_per_audio.agent_evaluation
-      const appeals = agentEval.eval_per_audio.map(appeal => appeal).filter(Boolean);
-      if (appeals.length == 0) {
-        agentEval.status = agentEvalStatus.CLOSED
+      // CRITICAL FIX: Load the agent evaluation with all its audio evaluations and their appeals
+      // The original code would have crashed here because `eval_per_audio` was not loaded.
+      const agentEval = await this.agentEvaluation.findOne({
+        where: { id: appeal.evaluation_per_audio.agent_evaluation.id },
+        relations: ['eval_per_audio', 'eval_per_audio.appeal'],
+      });
+
+      if (agentEval) {
+        const hasOpenAppeals = agentEval.eval_per_audio.some(
+          (audioEval) => audioEval.appeal && audioEval.appeal.status !== appealStatus.CLOSED,
+        );
+
+        // If there are no more open appeals, close the entire evaluation
+        if (!hasOpenAppeals) {
+          agentEval.status = agentEvalStatus.CLOSED;
+          await this.agentEvaluation.save(agentEval);
+        }
+
+        // Refresh the is_appealed flag, which will now be correctly set to false if needed
+        await this.refreshIsAppealedEvaluation(agentEval);
       }
 
       return {
         success: true,
         message: `Appeal with id ${id} has been successfully closed. Its status is now '${appeal.status}'. The changes applied are: from ${changes.from} to ${changes.to}.`,
-        appeal
-      }
+        appeal,
+      };
     } catch (error) {
       if (error instanceof ConflictException || error instanceof NotFoundException) {
-        throw error
+        throw error;
       } else {
         console.error(error);
-        throw new InternalServerErrorException("error occured during changing status to under review.")
+        throw new InternalServerErrorException('An error occurred while closing the appeal.');
       }
     }
   }
