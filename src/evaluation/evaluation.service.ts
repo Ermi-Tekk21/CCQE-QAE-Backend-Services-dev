@@ -122,23 +122,23 @@ export class EvaluationService {
       await entityManager.queryRunner?.commitTransaction()
 
       // // produce kafka for each audio to update audio status at audio service
-      // for (const audio of audios) {
-      //   const message = {
-      //     audio_id: audio.audio_id,
-      //     status: audioStatus.OPENED
-      //   }
-      //   const { message: audioKafkaMessage } = this.UpdateAudioStatus(message)
-      //   console.log(audioKafkaMessage);
-      // }
+      for (const audio of audios) {
+        const message = {
+          audio_id: audio.audio_id,
+          status: audioStatus.OPENED
+        }
+        const { message: audioKafkaMessage } = this.UpdateAudioStatus(message)
+        console.log(audioKafkaMessage);
+      }
 
 
-      // // produce kafka for notifing the evaluated agent
-      // const notifyMessage = {
-      //   assignmentId: agent_assignment_id,
-      //   evaluation: createdAgentEvaluation
-      // }
-      // const { message: notifyKafkaMessage } = this.notifyAgentEval(notifyMessage)
-      // console.log(notifyKafkaMessage);
+      // produce kafka for notifing the evaluated agent
+      const notifyMessage = {
+        assignmentId: agent_assignment_id,
+        evaluation: createdAgentEvaluation
+      }
+      const { message: notifyKafkaMessage } = this.notifyAgentEval(notifyMessage)
+      console.log(notifyKafkaMessage);
 
       return {
         success: true,
