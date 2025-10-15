@@ -1,10 +1,10 @@
-import { HttpException, Injectable, NotFoundException, BadRequestException, InternalServerErrorException, HttpStatus } from '@nestjs/common';
+import { HttpException, Injectable, NotFoundException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { CreateCatagoryDto } from './dto/create-catagory.dto';
 import { UpdateCatagoryDto } from './dto/update-catagory.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Catagory } from './entities/catagory.entity';
 import { Repository } from 'typeorm';
-import { paginate } from 'src/common/utils/paginate';
+import { paginate } from 'src/utils/paginate';
 import { QuestionLookup } from 'src/question-lookup/entities/question-lookup.entity';
 
 @Injectable()
@@ -40,7 +40,7 @@ export class CatagoryService {
     }
   }
 
-  async findAll(page: number, limit: number, sortOrder: 'ASC' | 'DESC' = 'DESC') {
+  async findAll(page: number, limit: number, sortOrder: 'asc' | 'desc' = 'desc') {
     try {
       const paginatedCatagories = await paginate(this.catagoryRepo, page, limit, {
         order: { created_at: sortOrder },
@@ -80,7 +80,7 @@ export class CatagoryService {
     }
   }
 
-  async getAllQuesPerCatagory(id: string, page: number, limit: number, sortOrder: 'ASC' | 'DESC' = 'DESC') {
+  async getAllQuesPerCatagory(id: string, page: number, limit: number, sortOrder: 'asc' | 'desc' = 'desc') {
     const paginatedQuestions = await paginate(this.questionLookupRepo, page, limit, {
       where: {
         catagory: {

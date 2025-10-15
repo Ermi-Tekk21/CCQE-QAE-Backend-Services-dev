@@ -7,10 +7,11 @@ import { EvalPerAudio } from 'src/evaluation/entities/evaluationPerAudio.entity'
 import { EvaluationModule } from 'src/evaluation/evaluation.module';
 import { AppealComplain } from './entities/appealComplain.entity';
 import { ClientsModule, Transport } from '@nestjs/microservices';
+import { AgentEvaluation } from 'src/evaluation/entities/evaluation.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Appeal, EvalPerAudio, AppealComplain]),
+    TypeOrmModule.forFeature([Appeal, EvalPerAudio, AppealComplain, AgentEvaluation]),
     forwardRef(() => EvaluationModule),
     ClientsModule.register([
       {

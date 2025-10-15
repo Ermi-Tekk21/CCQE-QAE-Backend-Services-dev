@@ -14,9 +14,6 @@ export class CreateGroupQuestionDto {
     @IsUUID()
     parentId?: string | null;
 
-    @IsUUID()
-    created_by: string;
-
     @IsArray()
     @ValidateNested({ each: true })
     @Type(() => CreateQuestionDto)

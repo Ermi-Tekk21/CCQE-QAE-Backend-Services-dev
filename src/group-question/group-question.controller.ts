@@ -41,7 +41,7 @@ export class GroupQuestionController {
   findAll(@Query() pagination: PaginationDto) {
     const { page, limit, sort_order } = pagination;
 
-    return this.groupQuestionService.findAll(page, limit, sort_order as 'ASC' | 'DESC');
+    return this.groupQuestionService.findAll(page, limit, sort_order as 'asc' | 'desc');
   }
 
   @Get(':id')

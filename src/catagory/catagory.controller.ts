@@ -17,7 +17,7 @@ export class CatagoryController {
   findAll(@Query() pagination: PaginationDto) {
     const { page, limit, sort_order } = pagination;
 
-    return this.catagoryService.findAll(page, limit, sort_order as 'ASC' | 'DESC');
+    return this.catagoryService.findAll(page, limit, sort_order as 'asc' | 'desc');
   }
 
   @Get(':id')
@@ -32,7 +32,7 @@ export class CatagoryController {
   ) {
 
     const { page, limit, sort_order } = pagination;
-    return this.catagoryService.getAllQuesPerCatagory(id, page, limit, sort_order as 'ASC' | 'DESC');
+    return this.catagoryService.getAllQuesPerCatagory(id, page, limit, sort_order as 'asc' | 'desc');
   }
 
   @Patch(':id')

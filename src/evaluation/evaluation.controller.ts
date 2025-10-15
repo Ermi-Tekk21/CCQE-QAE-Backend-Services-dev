@@ -15,9 +15,9 @@ export class EvaluationController {
 
   @Get()
   findAll(@Query() pagination: PaginationDto) {
-    const { page, limit, sort_order } = pagination;
+    const { page, limit, month, year, sort_order } = pagination;
 
-    return this.evaluationService.findAll(page, limit, sort_order as 'ASC' | 'DESC');
+    return this.evaluationService.findAll(page, limit, month, year, sort_order as 'asc' | 'desc');
   }
 
   @Get(':id')
@@ -27,8 +27,9 @@ export class EvaluationController {
 
   // assignment id
   @Get('assignment/:id')
-  findOneByAssignmentId(@Param('id') id: string) {
-    return this.evaluationService.findOneByAssignmentId(id);
+  findOneByAssignmentId(@Param('id') id: string, @Query() pagination: PaginationDto) {
+    const { month, year } = pagination;
+    return this.evaluationService.findOneByAssignmentId(id, month, year);
   }
 
   @Patch(':id')

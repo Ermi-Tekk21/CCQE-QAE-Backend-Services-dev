@@ -4,6 +4,8 @@ import { CreateAppealDto } from './dto/create-appeal.dto';
 import { UpdateAppealDto } from './dto/update-appeal.dto';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
 import { appealStatus } from 'src/common/appeal.status';
+import { ConfirmDto } from './dto/confirm.eval.dto';
+import { RejectionAppealDto } from './dto/rejection.appeal.dto';
 
 @Controller('appeal')
 export class AppealController {
@@ -17,14 +19,18 @@ export class AppealController {
     return this.appealService.create(id, createAppealDto);
   }
 
+  @Post('agent-evaluation/:id/confirm-audios')
+  confirm(@Body() confirmDto: ConfirmDto, @Param('id') id: string) {
+    return this.appealService.confirm(id, confirmDto)
+  }
+
   @Get()
   findAll(
     @Query() pagination: PaginationDto,
     @Query('status') status: appealStatus,
   ) {
     const { page, limit, sort_order } = pagination;
-
-    return this.appealService.findAll(page, limit, status, sort_order as 'ASC' | 'DESC');
+    return this.appealService.findAll(page, limit, status, sort_order as 'asc' | 'desc');
   }
 
   @Get(':id')
@@ -37,7 +43,7 @@ export class AppealController {
     @Param('id') id: string,
     @Query() pagination: PaginationDto) {
     const { sort_order } = pagination;
-    return this.appealService.findAppealsPerAgentEvaluationId(id, sort_order as 'ASC' | 'DESC');
+    return this.appealService.findAppealsPerAgentEvaluationId(id, sort_order as 'asc' | 'desc');
   }
 
   @Put('agent-evaluation/:id')
@@ -62,8 +68,8 @@ export class AppealController {
   }
 
   @Patch('reject/:id')
-  rejectAppeal(@Param('id') id: string) {
-    return this.appealService.rejectAppeal(id);
+  rejectAppeal(@Param('id') id: string, @Body() rejectionAppealDto: RejectionAppealDto) {
+    return this.appealService.rejectAppeal(id, rejectionAppealDto);
   }
 
   @Patch('close/:id')

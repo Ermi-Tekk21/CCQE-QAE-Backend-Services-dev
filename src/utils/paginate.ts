@@ -44,9 +44,9 @@ export async function paginate<T extends ObjectLiteral>(
     }
 
     if (options?.order) {
-        const order = options.order as { [key: string]: 'ASC' | 'DESC' };
+        const order = options.order as { [key: string]: 'asc' | 'desc' };
         Object.keys(order).forEach(key => {
-            queryBuilder.addOrderBy(`${alias}.${key}`, order[key]);
+            queryBuilder.addOrderBy(`${alias}.${key}`, order[key].toUpperCase() as 'ASC' | 'DESC');
         });
     }
 
