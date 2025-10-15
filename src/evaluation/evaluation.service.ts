@@ -235,7 +235,7 @@ export class EvaluationService {
         where.year_month = `${month}`;
       }
 
-      const evaluation = await entityManager.findOne(AgentEvaluation, {
+      const evaluation = await entityManager.find(AgentEvaluation, {
         where,
         relations: ['group_question', 'eval_per_audio', 'eval_per_audio.appeal', 'eval_per_audio.eval_per_question', 'eval_per_audio.eval_per_question.question_answerOp', 'eval_per_audio.eval_per_question.question_answerOp.answer_option_lookup', 'eval_per_audio.eval_per_question.question', 'eval_per_audio.eval_per_question.question.question_lookup', 'complain']
       })
