@@ -131,7 +131,6 @@ export class EvaluationService {
         console.log(audioKafkaMessage);
       }
 
-
       // produce kafka for notifing the evaluated agent
       const notifyMessage = {
         assignmentId: agent_assignment_id,
@@ -264,11 +263,16 @@ export class EvaluationService {
     const entityManager: EntityManager = queryRunner.manager;
     try {
       // check the agent evaluation using the incomming id
-      const agentEvaluation = await entityManager.findOne(AgentEvaluation, { where: { id } })
+      const agentEvaluation = await entityManager.findOne(AgentEvaluation, {
+        where: {
+          id: id
+        }, relations: ['eval_per_audio', 'eval_per_audio.appeal']
+      })
       if (!agentEvaluation) {
         throw new NotFoundException(`agent evaluation with ${id} not found`)
       }
-      await entityManager.save(AgentEvaluation, agentEvaluation)
+
+      const oldAgentResult = agentEvaluation.result
       let newAgentResult = 0
       let isAppealUpdate = false;
       for (const updateAudioEvaluationDto of updateEvaluationDto.audios) {
@@ -308,28 +312,61 @@ export class EvaluationService {
           newAudioResult += questionAnswerOP.weight
           await entityManager.save(EvalPerQuestion, evalPerQue)
         }
+
         evalPerAudio.result = newAudioResult
-        if (evalPerAudio.appeal !== null) {
-          isAppealUpdate = true;
+        await entityManager.save(EvalPerAudio, evalPerAudio)
+        if (evalPerAudio.appeal !== null && evalPerAudio.appeal.status !== appealStatus.CLOSED) {
+          isAppealUpdate = true
           // should throw bad request exception if new_result < intial_result
           if (newAudioResult < intialResult) {
             throw new BadRequestException(`Cannot decrease the evaluation result for audio evaluation ID ${updateAudioEvaluationDto.audio_evaluation_id} after an appeal. The updated result must be equal to or greater than the initial result.`);
           }
           await this.closeAppeal(evalPerAudio, intialResult, newAudioResult)
+          await entityManager.save(EvalPerAudio, evalPerAudio)
+
         }
-
-        await entityManager.save(EvalPerAudio, evalPerAudio)
-        newAgentResult += evalPerAudio.result
       }
-      agentEvaluation.result = newAgentResult / updateEvaluationDto.audios.length
 
+      const allAudioEvaluations = await entityManager.find(EvalPerAudio, {
+        where: { agent_evaluation: { id: agentEvaluation.id } },
+      });
+
+      newAgentResult = allAudioEvaluations.reduce((sum, audioEval) => sum + audioEval.result, 0);
+      agentEvaluation.result = newAgentResult / allAudioEvaluations.length
+      const agentNewResult = agentEvaluation.result
+      agentEvaluation.changes = {
+        from: oldAgentResult,
+        to: agentNewResult
+      }
+      agentEvaluation.is_re_evaluated = true
       await entityManager.save(AgentEvaluation, agentEvaluation)
-      await entityManager.queryRunner?.commitTransaction()
 
+      // Reload the agent evaluation to get the most up-to-date state after all changes.
+      const reloadedAgentEvaluation = await entityManager.findOne(AgentEvaluation, {
+        where: { id: agentEvaluation.id },
+        relations: ['eval_per_audio', 'eval_per_audio.appeal', 'eval_per_audio.eval_per_question', 'eval_per_audio.eval_per_question.question_answerOp'],
+      });
+
+      if (!reloadedAgentEvaluation) {
+        throw new InternalServerErrorException(`Failed to reload agent evaluation with id ${agentEvaluation.id}`);
+      }
+
+      const hasOpenAppeals = reloadedAgentEvaluation.eval_per_audio.some(
+        (audioEval) => audioEval.appeal && audioEval.appeal.status !== appealStatus.CLOSED,
+      );
+
+      // If there are no more open appeals, close the entire evaluation
+      if (!hasOpenAppeals) {
+        reloadedAgentEvaluation.status = agentEvalStatus.CLOSED;
+      }
+
+      await entityManager.save(AgentEvaluation, reloadedAgentEvaluation);
+      await entityManager.queryRunner?.commitTransaction()
+      await this.appealService.refreshIsAppealedEvaluation(reloadedAgentEvaluation);
       // produce kafka for notifing the evaluated agent
       const notifyMessage = {
-        assignmentId: agentEvaluation.agent_assignment_id,
-        evaluation: agentEvaluation,
+        assignmentId: reloadedAgentEvaluation.agent_assignment_id,
+        evaluation: reloadedAgentEvaluation,
         isAppealUpdate
       }
       const { message: notifyKafkaMessage } = this.notifyAgentEval(notifyMessage)

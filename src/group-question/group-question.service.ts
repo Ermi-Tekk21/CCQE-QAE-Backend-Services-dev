@@ -1196,15 +1196,17 @@ export class GroupQuestionService {
             ) {
               const appeal = evalPerAudio.appeal;
               appeal.status = appealStatus.CLOSED;
+
+              // produce kafka for audio service to notify the servie that the status of this specific audio.
+              const message = {
+                audio_id: appeal.evaluation_per_audio.audio_id,
+                status: audioStatus.CLOSED,
+              };
+              const { message: audioKafkaMessage } =
+                this.evaluationService.UpdateAudioStatus(message);
+              console.log(audioKafkaMessage);
               await entityManager.save(Appeal, appeal);
             }
-            const message = {
-              audio_id: evalPerAudio.audio_id,
-              status: audioStatus.CLOSED,
-            };
-            const { message: audioKafkaMessage } =
-              this.evaluationService.UpdateAudioStatus(message);
-            console.log(audioKafkaMessage);
           }
           agentEvaluation.status = agentEvalStatus.CLOSED;
           await entityManager.save(AgentEvaluation, agentEvaluation);

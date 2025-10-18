@@ -1,10 +1,11 @@
 import { agentEvalStatus } from "src/common/agent_evaluation.status";
 import { GroupQuestion } from "src/group-question/entities/group-question-entities/group-question.entity";
-import { BeforeInsert, Column, CreateDateColumn, DeleteDateColumn, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { BeforeInsert, Column, CreateDateColumn, DeleteDateColumn, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn, Unique, UpdateDateColumn } from "typeorm";
 import { EvalPerAudio } from "./evaluationPerAudio.entity";
 import { AppealComplain } from "src/appeal/entities/appealComplain.entity";
 
 @Entity("agent_evaluation")
+@Unique(["agent_assignment_id", "year_month"])
 export class AgentEvaluation {
     @PrimaryGeneratedColumn("uuid")
     id: string
@@ -41,6 +42,12 @@ export class AgentEvaluation {
     is_appealed: boolean
 
     @Column({ default: false })
+    is_re_evaluated: boolean
+
+    @Column({ type: "json", nullable: true })
+    changes: object
+
+    @Column({ default: false })
     is_deleted: boolean
 
     @Column({ type: "uuid", nullable: true })
@@ -64,9 +71,7 @@ export class AgentEvaluation {
     @ManyToOne(() => GroupQuestion, (group_question) => group_question.agent_evaluation)
     group_question: GroupQuestion
 
-    @OneToMany(() => EvalPerAudio, (eval_per_audio) => eval_per_audio.agent_evaluation, {
-        cascade: true
-    })
+    @OneToMany(() => EvalPerAudio, (eval_per_audio) => eval_per_audio.agent_evaluation)
     eval_per_audio: EvalPerAudio[]
 
     @ManyToOne(() => AppealComplain, (appealComplain) => appealComplain.id, { nullable: true })

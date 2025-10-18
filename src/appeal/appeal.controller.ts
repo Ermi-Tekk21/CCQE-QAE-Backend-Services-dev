@@ -72,8 +72,4 @@ export class AppealController {
     return this.appealService.rejectAppeal(id, rejectionAppealDto);
   }
 
-  @Patch('close/:id')
-  closeAppeal(@Param('id') id: string, @Body() changes: { from: number, to: number }) {
-    return this.appealService.closeAppeal(id, changes);
-  }
 }
