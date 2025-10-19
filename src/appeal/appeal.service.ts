@@ -210,7 +210,6 @@ export class AppealService {
       if (!agentEvaluation) {
         throw new BadRequestException(`Agent evaluation with id ${id} not found. Unable to update appeal.`);
       }
-      console.log("agent evaluation: ", agentEvaluation);
 
       const appeals = agentEvaluation.eval_per_audio.map(audioEval => audioEval.appeal).filter(Boolean);
       if (appeals.length == 0) {
@@ -376,7 +375,6 @@ export class AppealService {
       })
 
       const appealMap = agentEvaluation?.eval_per_audio?.map(evalPerAudio => evalPerAudio.appeal).filter(Boolean);
-      console.log(appealMap?.length);
 
       if (appealMap?.length === 0 && agentEvaluation) {
         const complainId = agentEvaluation.complain?.id
