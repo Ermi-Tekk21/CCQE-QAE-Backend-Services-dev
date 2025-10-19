@@ -644,10 +644,13 @@ export class AppealService {
         const audioEvaluation = await entityManager.findOne(EvalPerAudio, {
           where: {
             id: audioEvalId
-          }, relations: ['agent_evaluation']
+          }, relations: ['agent_evaluation', 'appeal']
         })
         if (!audioEvaluation) {
           throw new NotFoundException(`Audio evaluation with id ${audioEvalId} not found.`);
+        }
+        if (audioEvaluation.appeal) {
+          throw new BadRequestException(`Audio evaluation ${audioEvaluation.id} cannot be confirmed because it has an active appeal (appeal id: ${audioEvaluation.appeal.id}, status: ${audioEvaluation.appeal.status}). Please resolve or close the appeal (via admin) before confirming this audio evaluation.`)
         }
         if (audioEvaluation.agent_evaluation.id !== agentEval.id) {
           throw new ConflictException(`Audio evaluation with id ${audioEvalId} does not belong to agent evaluation with id ${id}. Please ensure all audio evaluation IDs belong to the specified agent evaluation before confirming.`);
@@ -679,7 +682,7 @@ export class AppealService {
         message: "Audio evaluations have been successfully confirmed and their statuses updated to CLOSED.",
       }
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof ConflictException) {
+      if (error instanceof NotFoundException || error instanceof ConflictException || error instanceof BadRequestException) {
         throw error
       } else {
         console.error(error);

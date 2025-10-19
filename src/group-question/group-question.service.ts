@@ -356,7 +356,10 @@ export class GroupQuestionService {
       // Find Category
       const catagoryEntity = await entityManager.findOne(Catagory, { where: { id: queData.catagoryId } });
       if (!catagoryEntity) {
-        throw new HttpException('Catagory not found.', HttpStatus.NOT_FOUND);
+        throw new HttpException(
+          `Category with ID "${queData.catagoryId}" referenced by question "${queData.content}" was not found. Please verify that the category exists and is not soft-deleted, or create the category first and provide its ID before creating this question.`,
+          HttpStatus.NOT_FOUND,
+        );
       }
 
       if (!questionLookup) {
