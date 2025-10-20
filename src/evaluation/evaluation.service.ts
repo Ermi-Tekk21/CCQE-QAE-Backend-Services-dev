@@ -41,7 +41,6 @@ export class EvaluationService {
         throw new BadRequestException(`The evaluation deadline for "${groupQuestion.name}" has already passed. The deadline was ${groupQuestion.evaluation_ends_at}. Please contact the administrator for further assistance.`)
       }
 
-
       // validate the dto
       const { audios } = createEvaluationDto;
       const quesUnderGroupQue: string[] = groupQuestion.question.map(ques => ques.id)
@@ -57,7 +56,7 @@ export class EvaluationService {
     }
   }
 
-  async create(createEvaluationDto: CreateEvaluationDto) {
+  async create(createEvaluationDto: CreateEvaluationDto, user_id: string) {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -73,6 +72,7 @@ export class EvaluationService {
       const createdAgentEvaluation = new AgentEvaluation()
       createdAgentEvaluation.agent_assignment_id = agent_assignment_id
       createdAgentEvaluation.group_question = groupQuestion
+      createdAgentEvaluation.created_by = user_id
       await entityManager.save(AgentEvaluation, createdAgentEvaluation)
 
       let agentResult = 0
@@ -83,6 +83,7 @@ export class EvaluationService {
         createdAudioEvaluation.agent_evaluation = createdAgentEvaluation
         createdAudioEvaluation.audio_id = audio.audio_id;
         createdAudioEvaluation.feedback = audio.feedback
+        createdAudioEvaluation.created_by = user_id
         const questions = audio.questions
         await entityManager.save(EvalPerAudio, createdAudioEvaluation)
 
@@ -109,6 +110,7 @@ export class EvaluationService {
           createdQuestionEvaluation.question_answerOp = foundQuestionAnswerOption
           audioResult += foundQuestionAnswerOption.weight
           createdQuestionEvaluation.updated_at = null
+          createdQuestionEvaluation.created_by = user_id
           await entityManager.save(EvalPerQuestion, createdQuestionEvaluation)
         }
         createdAudioEvaluation.result = audioResult
@@ -121,7 +123,7 @@ export class EvaluationService {
       await entityManager.save(AgentEvaluation, createdAgentEvaluation);
       await entityManager.queryRunner?.commitTransaction()
 
-      // // produce kafka for each audio to update audio status at audio service
+      // produce kafka for each audio to update audio status at audio service
       for (const audio of audios) {
         const message = {
           audio_id: audio.audio_id,
@@ -256,7 +258,7 @@ export class EvaluationService {
     }
   }
 
-  async update(id: string, updateEvaluationDto: UpdateEvaluationDto) {
+  async update(id: string, updateEvaluationDto: UpdateEvaluationDto, user_id: string) {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -309,10 +311,13 @@ export class EvaluationService {
             throw new BadRequestException('answer option and question is mismatched, allignment issue occured.')
           }
           evalPerQue.question_answerOp = questionAnswerOP
+          evalPerQue.updated_at = new Date()
+          evalPerQue.updated_by = user_id
           newAudioResult += questionAnswerOP.weight
           await entityManager.save(EvalPerQuestion, evalPerQue)
         }
-
+        evalPerAudio.updated_at = new Date()
+        evalPerAudio.updated_by = user_id
         evalPerAudio.result = newAudioResult
         await entityManager.save(EvalPerAudio, evalPerAudio)
         if (evalPerAudio.appeal !== null && evalPerAudio.appeal.status !== appealStatus.CLOSED) {
@@ -339,6 +344,8 @@ export class EvaluationService {
         to: agentNewResult
       }
       agentEvaluation.is_re_evaluated = true
+      agentEvaluation.updated_by = user_id
+      agentEvaluation.updated_at = new Date()
       await entityManager.save(AgentEvaluation, agentEvaluation)
 
       // Reload the agent evaluation to get the most up-to-date state after all changes.
@@ -428,7 +435,7 @@ export class EvaluationService {
     }
   }
 
-  async softDelete(id: string) {
+  async softDelete(id: string, user_id: string) {
     try {
       const agentEvaluation = await this.agentEvaluationRepo.findOne({ where: { id }, withDeleted: true })
       if (!agentEvaluation) {
@@ -440,6 +447,7 @@ export class EvaluationService {
       await this.agentEvaluationRepo.softDelete(id);
       agentEvaluation.deleted_at = new Date()
       agentEvaluation.is_deleted = true
+      agentEvaluation.deleted_by = user_id
       await this.agentEvaluationRepo.save(agentEvaluation)
       return {
         success: true,
@@ -472,6 +480,7 @@ export class EvaluationService {
       await entityManager.softDelete(AgentEvaluation, { id: id });
       agentEvaluation.is_deleted = false
       agentEvaluation.deleted_at = null
+      agentEvaluation.deleted_by = null
       await entityManager.save(AgentEvaluation, agentEvaluation)
       await entityManager.queryRunner?.commitTransaction();
 

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, Headers } from '@nestjs/common';
 import { EvaluationService } from './evaluation.service';
 import { CreateEvaluationDto } from './dto/agent-evaluation-dto/create-evaluation.dto';
 import { UpdateEvaluationDto } from './dto/agent-evaluation-dto/update-evaluation.dto';
@@ -9,8 +9,11 @@ export class EvaluationController {
   constructor(private readonly evaluationService: EvaluationService) { }
 
   @Post()
-  create(@Body() createEvaluationDto: CreateEvaluationDto) {
-    return this.evaluationService.create(createEvaluationDto);
+  create(
+    @Body() createEvaluationDto: CreateEvaluationDto,
+    @Headers('user_id') user_id: string
+  ) {
+    return this.evaluationService.create(createEvaluationDto, user_id);
   }
 
   @Get()
@@ -33,8 +36,12 @@ export class EvaluationController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateEvaluationDto: UpdateEvaluationDto) {
-    return this.evaluationService.update(id, updateEvaluationDto);
+  update(
+    @Param('id') id: string,
+    @Body() updateEvaluationDto: UpdateEvaluationDto,
+    @Headers('user_id') user_id: string
+  ) {
+    return this.evaluationService.update(id, updateEvaluationDto, user_id);
   }
 
   @Delete(':id')
@@ -43,8 +50,16 @@ export class EvaluationController {
   }
 
   @Patch('soft-delete/:id')
-  softDelete(@Param('id') id: string) {
-    return this.evaluationService.softDelete(id);
+  softDelete(
+    @Param('id') id: string,
+    @Headers('user_id') user_id: string) {
+    return this.evaluationService.softDelete(id, user_id);
+  }
+
+  @Patch('restore-soft-delete/:id')
+  restoreSoftDelete(
+    @Param('id') id: string) {
+    return this.evaluationService.restoreSoftDelete(id);
   }
 
   @Patch('close/:id')
