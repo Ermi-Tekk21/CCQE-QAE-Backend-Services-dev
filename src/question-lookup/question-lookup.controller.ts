@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, Headers } from '@nestjs/common';
 import { QuestionLookupService } from './question-lookup.service';
 import { CreateQuestionLookupDto } from './dto/create-question-lookup.dto';
 import { UpdateQuestionLookupDto } from './dto/update-question-lookup.dto';
@@ -9,8 +9,11 @@ export class QuestionLookupController {
     constructor(private readonly questionLookupService: QuestionLookupService) { }
 
     @Post()
-    create(@Body() createQuestionLookupDto: CreateQuestionLookupDto) {
-        return this.questionLookupService.create(createQuestionLookupDto);
+    create(
+        @Body() createQuestionLookupDto: CreateQuestionLookupDto,
+        @Headers('user_id') user_id: string
+    ) {
+        return this.questionLookupService.create(createQuestionLookupDto, user_id);
     }
 
     @Get('fetch-all')
@@ -32,13 +35,19 @@ export class QuestionLookupController {
     }
 
     @Patch(':id')
-    update(@Param('id') id: string, @Body() updateQuestionLookupDto: UpdateQuestionLookupDto) {
-        return this.questionLookupService.update(id, updateQuestionLookupDto);
+    update(
+        @Param('id') id: string, @Body() updateQuestionLookupDto: UpdateQuestionLookupDto,
+        @Headers('user_id') user_id: string
+    ) {
+        return this.questionLookupService.update(id, updateQuestionLookupDto, user_id);
     }
 
     @Patch('temp-delete/:id')
-    softDelete(@Param('id') id: string) {
-        return this.questionLookupService.softDelete(id);
+    softDelete(
+        @Param('id') id: string,
+        @Headers('user_id') user_id: string
+    ) {
+        return this.questionLookupService.softDelete(id, user_id);
     }
 
     @Patch('restore-temp-delete/:id')

@@ -18,7 +18,7 @@ export class QuestionLookupService {
         private readonly catagoryRepo: Repository<Catagory>
     ) { }
 
-    async create(createQuestionLookupDto: CreateQuestionLookupDto) {
+    async create(createQuestionLookupDto: CreateQuestionLookupDto, user_id: string) {
         try {
             const doesExist = await this.questionLookupRepo.findOne({ where: { content: createQuestionLookupDto.content } })
             if (doesExist) {
@@ -33,8 +33,9 @@ export class QuestionLookupService {
                 throw new NotFoundException(`Category with the provided ID ${createQuestionLookupDto.catagoryId} does not exist`)
             }
             const newQ = this.questionLookupRepo.create(createQuestionLookupDto)
-            newQ.catagory = catagory
-            newQ.updated_at = null
+            newQ.catagory = catagory;
+            newQ.updated_at = null;
+            newQ.created_by = user_id;
             await this.questionLookupRepo.save(newQ)
             return {
                 success: true,
@@ -117,7 +118,7 @@ export class QuestionLookupService {
     }
 
 
-    async update(id: string, updateQuestionLookupDto: UpdateQuestionLookupDto) {
+    async update(id: string, updateQuestionLookupDto: UpdateQuestionLookupDto, user_id: string) {
         try {
             const { ['question lookup']: questionL } = await this.findOne(id)
             const catagory = await this.catagoryRepo.findOne({
@@ -131,6 +132,7 @@ export class QuestionLookupService {
             const updated = this.questionLookupRepo.merge(questionL, updateQuestionLookupDto)
 
             updated.updated_at = new Date()
+            updated.updated_by = user_id;
             updated.catagory = catagory
             await this.questionLookupRepo.save(updated)
 
@@ -148,12 +150,13 @@ export class QuestionLookupService {
         }
     }
 
-    async softDelete(id: string) {
+    async softDelete(id: string, user_id: string) {
         try {
             const { ['question lookup']: questionL } = await this.findOne(id)
 
             await this.questionLookupRepo.softDelete(id)
             questionL.is_deleted = true;
+            questionL.deleted_by = user_id;
             questionL.deleted_at = new Date();
 
             await this.questionLookupRepo.save(questionL);
@@ -184,6 +187,7 @@ export class QuestionLookupService {
             await this.questionLookupRepo.restore(id)
             questionL.is_deleted = false
             questionL.deleted_at = null
+            questionL.deleted_by = null
             await this.questionLookupRepo.save(questionL)
             return {
                 success: true,

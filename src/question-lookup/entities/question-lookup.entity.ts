@@ -20,7 +20,7 @@ export class QuestionLookup {
     updated_by: string
 
     @Column({ type: "uuid", nullable: true })
-    deleted_by: string;
+    deleted_by: string | null;
 
     @CreateDateColumn({ type: "timestamp" })
     created_at: Date
