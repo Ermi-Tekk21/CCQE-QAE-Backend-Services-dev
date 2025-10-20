@@ -29,6 +29,12 @@ export class GroupQuestion {
     is_active: boolean
 
     @Column({ type: "timestamp", nullable: true })
+    published_at: Date | null
+
+    @Column({ type: "uuid", nullable: true })
+    published_by: string | null
+
+    @Column({ type: "timestamp", nullable: true })
     evaluation_ends_at: Date
 
     @Column({ default: false })
@@ -41,7 +47,7 @@ export class GroupQuestion {
     updated_by: string
 
     @Column({ type: "uuid", nullable: true })
-    deleted_by: string;
+    deleted_by: string | null;
 
     @CreateDateColumn({ type: "timestamp" })
     created_at: Date
