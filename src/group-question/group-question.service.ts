@@ -29,6 +29,8 @@ export class GroupQuestionService {
   constructor(
     @InjectRepository(GroupQuestion)
     private readonly groupQuestionRepo: Repository<GroupQuestion>,
+    @InjectRepository(Question)
+    private readonly questionRepo: Repository<Question>,
 
     @Inject(forwardRef(() => EvaluationService))
     private readonly evaluationService: EvaluationService,
@@ -493,6 +495,58 @@ export class GroupQuestionService {
     } catch (error) {
       console.error('Error finding all group questions:', error);
       throw new InternalServerErrorException('Failed to retrieve group questions.');
+    }
+  }
+
+  async findAllQuestionUnderSpecGroupQue(
+    params: {
+      page: number;
+      limit: number;
+      catagory: string;
+      search: string;
+      sortOrder: 'asc' | 'desc';
+    },
+    id: string,
+  ) {
+    try {
+      const { page, limit, catagory, search, sortOrder } = params;
+
+      const queryBuilder = this.questionRepo
+        .createQueryBuilder('question')
+        .leftJoinAndSelect('question.group_question', 'group_question')
+        .leftJoinAndSelect('question.question_lookup', 'question_lookup')
+        .leftJoinAndSelect('question_lookup.catagory', 'catagory')
+        .where('group_question.id = :id', { id });
+
+      if (catagory) {
+        queryBuilder.andWhere('catagory.name ILIKE :catagory', {
+          catagory: `%${catagory}%`,
+        });
+      }
+
+      if (search) {
+        queryBuilder.andWhere('question_lookup.content ILIKE :search', {
+          search: `%${search}%`,
+        });
+      }
+
+      const paginatedResult = await paginate(queryBuilder, page, limit, {
+        order: { created_at: sortOrder },
+      });
+
+      return {
+        success: true,
+        questions: paginatedResult.data,
+        meta: paginatedResult.meta,
+      };
+    } catch (error) {
+      console.error(
+        'Error finding all questions under a specific group question:',
+        error,
+      );
+      throw new InternalServerErrorException(
+        'Failed to retrieve questions for the specified group.',
+      );
     }
   }
 

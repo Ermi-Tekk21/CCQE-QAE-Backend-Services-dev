@@ -9,13 +9,14 @@ export async function paginate<T extends ObjectLiteral>(
     const skip = (page - 1) * limit;
 
     let queryBuilder: SelectQueryBuilder<T>;
-    const alias = 'entity';
 
     if (repositoryOrQueryBuilder instanceof Repository) {
-        queryBuilder = repositoryOrQueryBuilder.createQueryBuilder(alias);
+        queryBuilder = repositoryOrQueryBuilder.createQueryBuilder('entity');
     } else {
         queryBuilder = repositoryOrQueryBuilder;
     }
+
+    const alias = queryBuilder.expressionMap.mainAlias!.name;
 
     if (options?.where) {
         queryBuilder.where(options.where);

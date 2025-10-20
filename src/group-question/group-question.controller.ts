@@ -44,6 +44,19 @@ export class GroupQuestionController {
     return this.groupQuestionService.findAll(page, limit, sort_order as 'asc' | 'desc');
   }
 
+  @Get(':id/questions')
+  findAllQuestionUnderSpecGroupQue(@Query() pagination: PaginationDto, @Param('id') id: string) {
+    const { page, limit, sort_order, catagory, search } = pagination;
+
+    return this.groupQuestionService.findAllQuestionUnderSpecGroupQue({
+      page,
+      limit,
+      catagory,
+      search,
+      sortOrder: sort_order as 'asc' | 'desc'
+    }, id);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.groupQuestionService.findOne(id);
