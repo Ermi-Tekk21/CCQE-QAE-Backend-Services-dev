@@ -49,7 +49,6 @@ export class QuestionLookupService {
                 console.error(error)
                 throw new InternalServerErrorException(`Error occurred during creating question lookup: ${error.message || error}`)
             }
-
         }
     }
 
