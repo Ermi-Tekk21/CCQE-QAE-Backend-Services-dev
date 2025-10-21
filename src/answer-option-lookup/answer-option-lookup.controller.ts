@@ -18,9 +18,14 @@ export class AnswerOptionLookupController {
 
     @Get('fetch-all')
     findAll(@Query() pagination: PaginationDto) {
-        const { page, limit, sort_order } = pagination;
+        const { page, limit, sort_order, search } = pagination;
 
-        return this.answerOptionLookupService.findAll(page, limit, sort_order as 'asc' | 'desc');
+        return this.answerOptionLookupService.findAll({
+            page,
+            limit,
+            search,
+            sortOrder: sort_order as 'asc' | 'desc'
+        });
     }
 
     @Get(':id')
