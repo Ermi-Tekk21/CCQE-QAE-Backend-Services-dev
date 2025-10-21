@@ -38,6 +38,12 @@ export class Appeal {
     @UpdateDateColumn({ type: "timestamp", nullable: true, default: null })
     updated_at: Date | null;
 
+    @Column({ type: "uuid", nullable: true })
+    accepted_by: string;
+
+    @Column({ type: "uuid", nullable: true })
+    rejected_by: string;
+
     //relation
     @OneToOne(() => EvalPerAudio, (evalPerAudio) => evalPerAudio.appeal)
     @JoinColumn()

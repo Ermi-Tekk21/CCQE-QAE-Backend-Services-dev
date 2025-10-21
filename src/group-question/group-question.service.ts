@@ -23,12 +23,16 @@ import { appealStatus } from 'src/common/appeal.status';
 import { Appeal } from 'src/appeal/entities/appeal.entity';
 import { audioStatus } from 'src/common/audio.status';
 import { EvaluationService } from 'src/evaluation/evaluation.service';
+import { UpdateQuestionDto } from './dto/question-dto/update-question.dto';
+import { UpdateQuestionAnswerOPDto } from './dto/question-and-answer-option-dto/update-question-answerOP.dto';
 
 @Injectable()
 export class GroupQuestionService {
   constructor(
     @InjectRepository(GroupQuestion)
     private readonly groupQuestionRepo: Repository<GroupQuestion>,
+    @InjectRepository(Question)
+    private readonly questionRepo: Repository<Question>,
 
     @Inject(forwardRef(() => EvaluationService))
     private readonly evaluationService: EvaluationService,
@@ -94,6 +98,7 @@ export class GroupQuestionService {
   private async createAndSaveGroupQuestion(
     entityManager: EntityManager,
     createGroupQuestionDto: CreateGroupQuestionDto,
+    user_id: string
   ): Promise<GroupQuestion> {
     // Determine the version
     const max = await entityManager
@@ -124,7 +129,8 @@ export class GroupQuestionService {
     let group_question = entityManager.create(GroupQuestion, createGroupQuestionDto);
     group_question.name = groupQuestionName;
     group_question.status = groupQuestionStatus.DRAFT;
-    // group_question.created_by = createdByUserId;
+    group_question.created_by = user_id;
+    group_question.updated_at = null;
     group_question.evaluation_ends_at = createGroupQuestionDto.evaluation_ends_at;
     group_question.version = (Number(max.max || 0) + 0.1).toFixed(1);
     group_question.weight = sumOfQuestionWeights;
@@ -336,7 +342,8 @@ export class GroupQuestionService {
   private async processNestedQuestions(
     entityManager: EntityManager,
     savedGroupQuestion: GroupQuestion,
-    questionsDto: any[], // Use a more specific DTO type here if available
+    questionsDto: CreateQuestionDto[], // Use a more specific DTO type here if available
+    user_id: string,
   ): Promise<void> {
     if (!questionsDto || questionsDto.length === 0) {
       return; // No questions to process
@@ -356,11 +363,14 @@ export class GroupQuestionService {
       // Find Category
       const catagoryEntity = await entityManager.findOne(Catagory, { where: { id: queData.catagoryId } });
       if (!catagoryEntity) {
-        throw new HttpException('Catagory not found.', HttpStatus.NOT_FOUND);
+        throw new HttpException(
+          `Category with ID "${queData.catagoryId}" referenced by question "${queData.content}" was not found. Please verify that the category exists and is not soft-deleted, or create the category first and provide its ID before creating this question.`,
+          HttpStatus.NOT_FOUND,
+        );
       }
 
       if (!questionLookup) {
-        questionLookup = entityManager.create(QuestionLookup, { content: queData.content, catagory: catagoryEntity, created_by: queData.created_by, is_deleted: false });
+        questionLookup = entityManager.create(QuestionLookup, { content: queData.content, catagory: catagoryEntity, created_by: user_id, is_deleted: false });
         await entityManager.save(QuestionLookup, questionLookup);
       }
 
@@ -370,7 +380,7 @@ export class GroupQuestionService {
         group_question: savedGroupQuestion,
         question_lookup: questionLookup,
         is_deleted: false,
-        created_by: queData.created_by,
+        created_by: user_id,
         weight: queData.weight,
       });
       await entityManager.save(Question, newQuestion);
@@ -381,7 +391,7 @@ export class GroupQuestionService {
         this.validateQuestionAnsOP(ansData, queData)
         let answerOption = await entityManager.findOne(AnswerOptionLookup, { where: { content: ansData.content } });
         if (!answerOption) {
-          answerOption = entityManager.create(AnswerOptionLookup, { content: ansData.content, created_by: queData.created_by, is_deleted: false });
+          answerOption = entityManager.create(AnswerOptionLookup, { content: ansData.content, created_by: user_id, is_deleted: false });
           await entityManager.save(AnswerOptionLookup, answerOption);
         }
 
@@ -390,7 +400,7 @@ export class GroupQuestionService {
           answer_option_lookup: answerOption,
           weight: ansData.weight,
           is_deleted: false,
-          created_by: queData.created_by,
+          created_by: user_id,
         });
         createdQAO.push(qao);
         await entityManager.save(QuestionAnswerOp, qao);
@@ -409,7 +419,7 @@ export class GroupQuestionService {
     }
   }
 
-  async create(createGroupQuestionDto: CreateGroupQuestionDto) {
+  async create(createGroupQuestionDto: CreateGroupQuestionDto, user_id: string) {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -420,7 +430,7 @@ export class GroupQuestionService {
       // step 1
       await this.validateGroupQuestionCreation(entityManager, createGroupQuestionDto);  // checked and working
       // step 2
-      const savedGroupQuestion = await this.createAndSaveGroupQuestion(entityManager, createGroupQuestionDto);
+      const savedGroupQuestion = await this.createAndSaveGroupQuestion(entityManager, createGroupQuestionDto, user_id);
 
       // step 3, but isolated and to be checked later
       if (createGroupQuestionDto.parentId) {
@@ -430,7 +440,9 @@ export class GroupQuestionService {
       }
 
       // Step 4: Process and save all nested questions and answer options
-      await this.processNestedQuestions(entityManager, savedGroupQuestion, createGroupQuestionDto.questions);
+      await this.processNestedQuestions(entityManager, savedGroupQuestion, createGroupQuestionDto.questions, user_id);
+      savedGroupQuestion.updated_at = null
+      await entityManager.save(GroupQuestion, savedGroupQuestion)
 
       const responseData = {
         ...savedGroupQuestion,
@@ -493,6 +505,58 @@ export class GroupQuestionService {
     }
   }
 
+  async findAllQuestionUnderSpecGroupQue(
+    params: {
+      page: number;
+      limit: number;
+      catagory: string;
+      search: string;
+      sortOrder: 'asc' | 'desc';
+    },
+    id: string,
+  ) {
+    try {
+      const { page, limit, catagory, search, sortOrder } = params;
+
+      const queryBuilder = this.questionRepo
+        .createQueryBuilder('question')
+        .leftJoinAndSelect('question.group_question', 'group_question')
+        .leftJoinAndSelect('question.question_lookup', 'question_lookup')
+        .leftJoinAndSelect('question_lookup.catagory', 'catagory')
+        .where('group_question.id = :id', { id });
+
+      if (catagory) {
+        queryBuilder.andWhere('catagory.name ILIKE :catagory', {
+          catagory: `%${catagory}%`,
+        });
+      }
+
+      if (search) {
+        queryBuilder.andWhere('question_lookup.content ILIKE :search', {
+          search: `%${search}%`,
+        });
+      }
+
+      const paginatedResult = await paginate(queryBuilder, page, limit, {
+        order: { created_at: sortOrder },
+      });
+
+      return {
+        success: true,
+        questions: paginatedResult.data,
+        meta: paginatedResult.meta,
+      };
+    } catch (error) {
+      console.error(
+        'Error finding all questions under a specific group question:',
+        error,
+      );
+      throw new InternalServerErrorException(
+        'Failed to retrieve questions for the specified group.',
+      );
+    }
+  }
+
   async findOne(id: string) {
     try {
       const gQue = await this.dataSource.manager.findOne(GroupQuestion, {
@@ -524,12 +588,11 @@ export class GroupQuestionService {
   private async processUpdatedQuestions(
     entityManager: EntityManager,
     groupQuestion: GroupQuestion,
-    updatedQuestionsDto: any[],
-    updatedByUserId: string,
+    updatedQuestionsDto: UpdateQuestionDto[],
+    user_id: string,
   ): Promise<void> {
     const existingQuestionsMap = new Map((groupQuestion.question || []).map(q => [q.id, q]));
     const questionsToSave: Question[] = [];
-    console.log(questionsToSave);
 
     const sumOfQuestionWeights = updatedQuestionsDto.reduce((sum, question) => sum + question.weight, 0);
     if (sumOfQuestionWeights > 100) {
@@ -546,11 +609,11 @@ export class GroupQuestionService {
 
       if (dtoQ.id) {
         // Update an existing question
-        questionEntity = await this.updateExistingQuestion(entityManager, groupQuestion, dtoQ, updatedByUserId, existingQuestionsMap);
+        questionEntity = await this.updateExistingQuestion(entityManager, groupQuestion, dtoQ, user_id, existingQuestionsMap);
         existingQuestionsMap.delete(dtoQ.id); // Mark as processed
       } else {
         // Create a new question
-        questionEntity = await this.createNewQuestion(entityManager, groupQuestion, dtoQ, updatedByUserId);
+        questionEntity = await this.createNewQuestion(entityManager, groupQuestion, dtoQ, user_id);
         if (!groupQuestion.question) {
           groupQuestion.question = [];
         }
@@ -558,7 +621,7 @@ export class GroupQuestionService {
       }
 
       // Process answer options for the current question
-      const qaosToSave = await this.processQuestionAnswerOptions(entityManager, questionEntity, dtoQ.updated_question_answer_option, updatedByUserId);
+      const qaosToSave = await this.processQuestionAnswerOptions(entityManager, questionEntity, dtoQ.updated_question_answer_option, user_id);
       questionEntity.question_answer_option = qaosToSave;
       questionsToSave.push(questionEntity);
     }
@@ -578,7 +641,7 @@ export class GroupQuestionService {
     entityManager: EntityManager,
     groupQuestion: GroupQuestion,
     dtoQ: any,
-    updatedByUserId: string,
+    user_id: string,
     existingQuestionsMap: Map<string, Question>,
   ): Promise<Question> {
     if (!existingQuestionsMap.has(dtoQ.id)) {
@@ -600,16 +663,16 @@ export class GroupQuestionService {
       }
 
       if (!questionLookup) {
-        questionLookup = entityManager.create(QuestionLookup, { content: dtoQ.content, catagory: catagoryEntity, created_by: updatedByUserId, is_deleted: false });
+        questionLookup = entityManager.create(QuestionLookup, { content: dtoQ.content, catagory: catagoryEntity, created_by: user_id, is_deleted: false });
         await entityManager.save(QuestionLookup, questionLookup);
       }
       questionEntity.question_lookup = questionLookup;
+      questionEntity.updated_by = user_id;
+      questionEntity.updated_at = new Date();
     }
 
     entityManager.merge(Question, questionEntity, dtoQ);
 
-
-    await entityManager.save(Question, questionEntity);
     return questionEntity;
   }
 
@@ -617,7 +680,7 @@ export class GroupQuestionService {
     entityManager: EntityManager,
     groupQuestion: GroupQuestion,
     dtoQ: any,
-    updatedByUserId: string,
+    user_id: string,
   ): Promise<Question> {
     const questionData = { ...dtoQ };
     delete questionData.id;
@@ -628,7 +691,7 @@ export class GroupQuestionService {
       throw new NotFoundException(`catagory ${dtoQ.catagoryId} not found`)
     }
     if (!questionLookup) {
-      questionLookup = entityManager.create(QuestionLookup, { content: dtoQ.content, catagory: catagory, created_by: updatedByUserId, is_deleted: false });
+      questionLookup = entityManager.create(QuestionLookup, { content: dtoQ.content, catagory: catagory, created_by: user_id, is_deleted: false });
       await entityManager.save(QuestionLookup, questionLookup);
     }
 
@@ -636,7 +699,7 @@ export class GroupQuestionService {
       ...questionData,
       group_question: groupQuestion,
       question_lookup: questionLookup,
-      created_by: updatedByUserId || groupQuestion.created_by,
+      created_by: user_id || groupQuestion.created_by,
       is_deleted: false,
     });
 
@@ -647,8 +710,8 @@ export class GroupQuestionService {
   private async processQuestionAnswerOptions(
     entityManager: EntityManager,
     questionEntity: Question | undefined,
-    updatedQaoDto: any[],
-    updatedByUserId: string,
+    updatedQaoDto: UpdateQuestionAnswerOPDto[],
+    user_id: string,
   ): Promise<QuestionAnswerOp[]> {
     if (!questionEntity) {
       throw new Error('questionEntity is undefined');
@@ -669,12 +732,13 @@ export class GroupQuestionService {
       if (existingQao) {
         // Update existing QAO
         qaoEntity = existingQao;
+        qaoEntity.updated_by = user_id
         entityManager.merge(QuestionAnswerOp, qaoEntity, dtoQao);
       } else {
         // Create a new QAO and its lookup
         let answerOptionLookup = await entityManager.findOne(AnswerOptionLookup, { where: { content: dtoQao.content } });
         if (!answerOptionLookup) {
-          answerOptionLookup = entityManager.create(AnswerOptionLookup, { content: dtoQao.content, created_by: updatedByUserId, is_deleted: false });
+          answerOptionLookup = entityManager.create(AnswerOptionLookup, { content: dtoQao.content, created_by: user_id, is_deleted: false });
           await entityManager.save(AnswerOptionLookup, answerOptionLookup);
         }
 
@@ -704,7 +768,7 @@ export class GroupQuestionService {
     return qaosToSave;
   }
 
-  async update(id: string, updateGroupQuestionDto: UpdateGroupQuestionDto): Promise<{
+  async update(id: string, updateGroupQuestionDto: UpdateGroupQuestionDto, user_id: string): Promise<{
     success: boolean,
     message: string,
     "updated group question": GroupQuestion
@@ -730,10 +794,10 @@ export class GroupQuestionService {
       // Apply top-level updates to the GroupQuestion entity
       entityManager.merge(GroupQuestion, groupQuestion, updateGroupQuestionDto);
       groupQuestion.updated_at = new Date();
-      groupQuestion.updated_by = updateGroupQuestionDto.updated_by;
+      groupQuestion.updated_by = user_id;
 
       // Process all nested questions (creation, update, and delete)
-      await this.processUpdatedQuestions(entityManager, groupQuestion, updateGroupQuestionDto.updated_questions, updateGroupQuestionDto.updated_by);
+      await this.processUpdatedQuestions(entityManager, groupQuestion, updateGroupQuestionDto.updated_questions, user_id);
 
       // Recalculate and update the total weight
       const allQuestions = await entityManager.find(Question, { where: { group_question: { id: groupQuestion.id } } });
@@ -763,7 +827,7 @@ export class GroupQuestionService {
     }
   }
 
-  async publish(id: string): Promise<{
+  async publish(id: string, user_id: string): Promise<{
     success: boolean,
     message: string,
     "published group question": GroupQuestion
@@ -787,7 +851,8 @@ export class GroupQuestionService {
       if (gQue.weight === 100) {
         gQue.is_active = true;
         gQue.status = groupQuestionStatus.PUBLISHED
-
+        gQue.published_at = new Date();
+        gQue.published_by = user_id;
         await entityManager.save(GroupQuestion, gQue);
         await queryRunner.commitTransaction();
 
@@ -843,7 +908,9 @@ export class GroupQuestionService {
       if (group_question?.agent_evaluation.length !== 0) {
         throw new BadRequestException('you can not undo publish since evaluation associated with this graoup question has started.')
       }
-      gQue.is_active = false
+      gQue.is_active = false;
+      gQue.published_at = null;
+      gQue.published_by = null;
       gQue.status = groupQuestionStatus.DRAFT
       await entityManager.save(GroupQuestion, gQue);
       await queryRunner.commitTransaction();
@@ -915,7 +982,7 @@ export class GroupQuestionService {
     }
   }
 
-  async softDelete(id: string) {
+  async softDelete(id: string, user_id: string) {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -942,6 +1009,7 @@ export class GroupQuestionService {
       await entityManager.softDelete(GroupQuestion, { id: gQue.id });
       gQue.deleted_at = new Date
       gQue.is_deleted = true
+      gQue.deleted_by = user_id
       await entityManager.save(GroupQuestion, gQue)
 
       await queryRunner.commitTransaction();
@@ -988,6 +1056,7 @@ export class GroupQuestionService {
       await entityManager.restore(GroupQuestion, { id: gQue.id });
       gQue.is_deleted = false
       gQue.deleted_at = null
+      gQue.deleted_by = null
       await entityManager.save(GroupQuestion, gQue);
       await queryRunner.commitTransaction();
 
@@ -1012,10 +1081,9 @@ export class GroupQuestionService {
     }
   }
 
-  async deleteQueOrAnsOPs(id: string, deletQueOrAnsOpDto: DeletQueOrAnsOpDto) {
+  async deleteQueOrAnsOPs(id: string, deletQueOrAnsOpDto: DeletQueOrAnsOpDto, user_id: string) {
 
     const createupdateDto: UpdateGroupQuestionDto = {
-      updated_by: '',
       updated_questions: []
     };
 
@@ -1023,7 +1091,6 @@ export class GroupQuestionService {
     try {
       const { ['group question']: groupQuestion } = await this.findOne(id)
       createupdateDto.evaluation_ends_at = groupQuestion.evaluation_ends_at;
-      createupdateDto.updated_by = deletQueOrAnsOpDto.deletedBy;
       createupdateDto.parentId = groupQuestion.parent
 
       const taregtQuestion = groupQuestion.question.some(q => q.id === deletQueOrAnsOpDto.questionId);
@@ -1074,7 +1141,7 @@ export class GroupQuestionService {
         );
       }
 
-      const { ['updated group question']: updatedGroupQuestion } = await this.update(id, createupdateDto)
+      const { ['updated group question']: updatedGroupQuestion } = await this.update(id, createupdateDto, user_id)
       return {
         success: true,
         message: `Group question with ID "${id}" updated successfully.`,
@@ -1196,15 +1263,17 @@ export class GroupQuestionService {
             ) {
               const appeal = evalPerAudio.appeal;
               appeal.status = appealStatus.CLOSED;
+
+              // produce kafka for audio service to notify the servie that the status of this specific audio.
+              const message = {
+                audio_id: appeal.evaluation_per_audio.audio_id,
+                status: audioStatus.CLOSED,
+              };
+              const { message: audioKafkaMessage } =
+                this.evaluationService.UpdateAudioStatus(message);
+              console.log(audioKafkaMessage);
               await entityManager.save(Appeal, appeal);
             }
-            const message = {
-              audio_id: evalPerAudio.audio_id,
-              status: audioStatus.CLOSED,
-            };
-            const { message: audioKafkaMessage } =
-              this.evaluationService.UpdateAudioStatus(message);
-            console.log(audioKafkaMessage);
           }
           agentEvaluation.status = agentEvalStatus.CLOSED;
           await entityManager.save(AgentEvaluation, agentEvaluation);

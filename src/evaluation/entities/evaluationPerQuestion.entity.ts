@@ -30,9 +30,7 @@ export class EvalPerQuestion {
     deleted_at: Date;
 
     // relationship
-    @ManyToOne(() => EvalPerAudio, (eval_per_audio) => eval_per_audio.eval_per_question, {
-        onDelete: "CASCADE"
-    })
+    @ManyToOne(() => EvalPerAudio, (eval_per_audio) => eval_per_audio.eval_per_question)
     eval_per_audio: EvalPerAudio
 
     @ManyToOne(() => QuestionAnswerOp, (question_answerOp) => question_answerOp.eval_per_question)

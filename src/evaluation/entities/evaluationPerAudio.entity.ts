@@ -39,14 +39,10 @@ export class EvalPerAudio {
     deleted_at: Date;
 
     // relationship
-    @ManyToOne(() => AgentEvaluation, (agent_eval) => agent_eval.eval_per_audio, {
-        onDelete: 'CASCADE'
-    })
+    @ManyToOne(() => AgentEvaluation, (agent_eval) => agent_eval.eval_per_audio)
     agent_evaluation: AgentEvaluation
 
-    @OneToMany(() => EvalPerQuestion, (eval_per_question) => eval_per_question.eval_per_audio, {
-        cascade: true
-    })
+    @OneToMany(() => EvalPerQuestion, (eval_per_question) => eval_per_question.eval_per_audio)
     eval_per_question: EvalPerQuestion[]
 
     @OneToOne(() => Appeal, (appeal) => appeal.evaluation_per_audio)

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Put, Param, Delete, Patch, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Put, Param, Delete, Patch, Query, Headers } from '@nestjs/common';
 import { AppealService } from './appeal.service';
 import { CreateAppealDto } from './dto/create-appeal.dto';
 import { UpdateAppealDto } from './dto/update-appeal.dto';
@@ -15,8 +15,12 @@ export class AppealController {
 
   //agent evaluation
   @Post('agent-evaluation/:id')
-  create(@Body() createAppealDto: CreateAppealDto, @Param('id') id: string) {
-    return this.appealService.create(id, createAppealDto);
+  create(
+    @Body() createAppealDto: CreateAppealDto,
+    @Param('id') id: string,
+    @Headers('user_id') user_id: string
+  ) {
+    return this.appealService.create(id, createAppealDto, user_id);
   }
 
   @Post('agent-evaluation/:id/confirm-audios')
@@ -47,8 +51,12 @@ export class AppealController {
   }
 
   @Put('agent-evaluation/:id')
-  update(@Param('id') id: string, @Body() updateAppealDto: UpdateAppealDto) {
-    return this.appealService.update(id, updateAppealDto);
+  update(
+    @Param('id') id: string,
+    @Body() updateAppealDto: UpdateAppealDto,
+    @Headers('user_id') user_id: string
+  ) {
+    return this.appealService.update(id, updateAppealDto, user_id);
   }
 
   //appealid
@@ -63,17 +71,20 @@ export class AppealController {
   }
 
   @Patch('accept/:id')
-  acceptAppeal(@Param('id') id: string) {
-    return this.appealService.acceptAppeal(id)
+  acceptAppeal(
+    @Param('id') id: string,
+    @Headers('user_id') user_id: string
+  ) {
+    return this.appealService.acceptAppeal(id, user_id)
   }
 
   @Patch('reject/:id')
-  rejectAppeal(@Param('id') id: string, @Body() rejectionAppealDto: RejectionAppealDto) {
-    return this.appealService.rejectAppeal(id, rejectionAppealDto);
+  rejectAppeal(
+    @Param('id') id: string,
+    @Body() rejectionAppealDto: RejectionAppealDto,
+    @Headers('user_id') user_id: string
+  ) {
+    return this.appealService.rejectAppeal(id, rejectionAppealDto, user_id);
   }
 
-  @Patch('close/:id')
-  closeAppeal(@Param('id') id: string, @Body() changes: { from: number, to: number }) {
-    return this.appealService.closeAppeal(id, changes);
-  }
 }

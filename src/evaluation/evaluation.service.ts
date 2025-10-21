@@ -41,7 +41,6 @@ export class EvaluationService {
         throw new BadRequestException(`The evaluation deadline for "${groupQuestion.name}" has already passed. The deadline was ${groupQuestion.evaluation_ends_at}. Please contact the administrator for further assistance.`)
       }
 
-
       // validate the dto
       const { audios } = createEvaluationDto;
       const quesUnderGroupQue: string[] = groupQuestion.question.map(ques => ques.id)
@@ -57,7 +56,7 @@ export class EvaluationService {
     }
   }
 
-  async create(createEvaluationDto: CreateEvaluationDto) {
+  async create(createEvaluationDto: CreateEvaluationDto, user_id: string) {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -73,6 +72,7 @@ export class EvaluationService {
       const createdAgentEvaluation = new AgentEvaluation()
       createdAgentEvaluation.agent_assignment_id = agent_assignment_id
       createdAgentEvaluation.group_question = groupQuestion
+      createdAgentEvaluation.created_by = user_id
       await entityManager.save(AgentEvaluation, createdAgentEvaluation)
 
       let agentResult = 0
@@ -83,6 +83,7 @@ export class EvaluationService {
         createdAudioEvaluation.agent_evaluation = createdAgentEvaluation
         createdAudioEvaluation.audio_id = audio.audio_id;
         createdAudioEvaluation.feedback = audio.feedback
+        createdAudioEvaluation.created_by = user_id
         const questions = audio.questions
         await entityManager.save(EvalPerAudio, createdAudioEvaluation)
 
@@ -109,6 +110,7 @@ export class EvaluationService {
           createdQuestionEvaluation.question_answerOp = foundQuestionAnswerOption
           audioResult += foundQuestionAnswerOption.weight
           createdQuestionEvaluation.updated_at = null
+          createdQuestionEvaluation.created_by = user_id
           await entityManager.save(EvalPerQuestion, createdQuestionEvaluation)
         }
         createdAudioEvaluation.result = audioResult
@@ -121,7 +123,7 @@ export class EvaluationService {
       await entityManager.save(AgentEvaluation, createdAgentEvaluation);
       await entityManager.queryRunner?.commitTransaction()
 
-      // // produce kafka for each audio to update audio status at audio service
+      // produce kafka for each audio to update audio status at audio service
       for (const audio of audios) {
         const message = {
           audio_id: audio.audio_id,
@@ -130,7 +132,6 @@ export class EvaluationService {
         const { message: audioKafkaMessage } = this.UpdateAudioStatus(message)
         console.log(audioKafkaMessage);
       }
-
 
       // produce kafka for notifing the evaluated agent
       const notifyMessage = {
@@ -257,18 +258,23 @@ export class EvaluationService {
     }
   }
 
-  async update(id: string, updateEvaluationDto: UpdateEvaluationDto) {
+  async update(id: string, updateEvaluationDto: UpdateEvaluationDto, user_id: string) {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
     const entityManager: EntityManager = queryRunner.manager;
     try {
       // check the agent evaluation using the incomming id
-      const agentEvaluation = await entityManager.findOne(AgentEvaluation, { where: { id } })
+      const agentEvaluation = await entityManager.findOne(AgentEvaluation, {
+        where: {
+          id: id
+        }, relations: ['eval_per_audio', 'eval_per_audio.appeal']
+      })
       if (!agentEvaluation) {
         throw new NotFoundException(`agent evaluation with ${id} not found`)
       }
-      await entityManager.save(AgentEvaluation, agentEvaluation)
+
+      const oldAgentResult = agentEvaluation.result
       let newAgentResult = 0
       let isAppealUpdate = false;
       for (const updateAudioEvaluationDto of updateEvaluationDto.audios) {
@@ -305,31 +311,69 @@ export class EvaluationService {
             throw new BadRequestException('answer option and question is mismatched, allignment issue occured.')
           }
           evalPerQue.question_answerOp = questionAnswerOP
+          evalPerQue.updated_at = new Date()
+          evalPerQue.updated_by = user_id
           newAudioResult += questionAnswerOP.weight
           await entityManager.save(EvalPerQuestion, evalPerQue)
         }
+        evalPerAudio.updated_at = new Date()
+        evalPerAudio.updated_by = user_id
         evalPerAudio.result = newAudioResult
-        if (evalPerAudio.appeal !== null) {
-          isAppealUpdate = true;
+        await entityManager.save(EvalPerAudio, evalPerAudio)
+        if (evalPerAudio.appeal !== null && evalPerAudio.appeal.status !== appealStatus.CLOSED) {
+          isAppealUpdate = true
           // should throw bad request exception if new_result < intial_result
           if (newAudioResult < intialResult) {
             throw new BadRequestException(`Cannot decrease the evaluation result for audio evaluation ID ${updateAudioEvaluationDto.audio_evaluation_id} after an appeal. The updated result must be equal to or greater than the initial result.`);
           }
           await this.closeAppeal(evalPerAudio, intialResult, newAudioResult)
+          await entityManager.save(EvalPerAudio, evalPerAudio)
+
         }
-
-        await entityManager.save(EvalPerAudio, evalPerAudio)
-        newAgentResult += evalPerAudio.result
       }
-      agentEvaluation.result = newAgentResult / updateEvaluationDto.audios.length
 
+      const allAudioEvaluations = await entityManager.find(EvalPerAudio, {
+        where: { agent_evaluation: { id: agentEvaluation.id } },
+      });
+
+      newAgentResult = allAudioEvaluations.reduce((sum, audioEval) => sum + audioEval.result, 0);
+      agentEvaluation.result = newAgentResult / allAudioEvaluations.length
+      const agentNewResult = agentEvaluation.result
+      agentEvaluation.changes = {
+        from: oldAgentResult,
+        to: agentNewResult
+      }
+      agentEvaluation.is_re_evaluated = true
+      agentEvaluation.updated_by = user_id
+      agentEvaluation.updated_at = new Date()
       await entityManager.save(AgentEvaluation, agentEvaluation)
-      await entityManager.queryRunner?.commitTransaction()
 
+      // Reload the agent evaluation to get the most up-to-date state after all changes.
+      const reloadedAgentEvaluation = await entityManager.findOne(AgentEvaluation, {
+        where: { id: agentEvaluation.id },
+        relations: ['eval_per_audio', 'eval_per_audio.appeal', 'eval_per_audio.eval_per_question', 'eval_per_audio.eval_per_question.question_answerOp'],
+      });
+
+      if (!reloadedAgentEvaluation) {
+        throw new InternalServerErrorException(`Failed to reload agent evaluation with id ${agentEvaluation.id}`);
+      }
+
+      const hasOpenAppeals = reloadedAgentEvaluation.eval_per_audio.some(
+        (audioEval) => audioEval.appeal && audioEval.appeal.status !== appealStatus.CLOSED,
+      );
+
+      // If there are no more open appeals, close the entire evaluation
+      if (!hasOpenAppeals) {
+        reloadedAgentEvaluation.status = agentEvalStatus.CLOSED;
+      }
+
+      await entityManager.save(AgentEvaluation, reloadedAgentEvaluation);
+      await entityManager.queryRunner?.commitTransaction()
+      await this.appealService.refreshIsAppealedEvaluation(reloadedAgentEvaluation);
       // produce kafka for notifing the evaluated agent
       const notifyMessage = {
-        assignmentId: agentEvaluation.agent_assignment_id,
-        evaluation: agentEvaluation,
+        assignmentId: reloadedAgentEvaluation.agent_assignment_id,
+        evaluation: reloadedAgentEvaluation,
         isAppealUpdate
       }
       const { message: notifyKafkaMessage } = this.notifyAgentEval(notifyMessage)
@@ -391,7 +435,7 @@ export class EvaluationService {
     }
   }
 
-  async softDelete(id: string) {
+  async softDelete(id: string, user_id: string) {
     try {
       const agentEvaluation = await this.agentEvaluationRepo.findOne({ where: { id }, withDeleted: true })
       if (!agentEvaluation) {
@@ -403,6 +447,7 @@ export class EvaluationService {
       await this.agentEvaluationRepo.softDelete(id);
       agentEvaluation.deleted_at = new Date()
       agentEvaluation.is_deleted = true
+      agentEvaluation.deleted_by = user_id
       await this.agentEvaluationRepo.save(agentEvaluation)
       return {
         success: true,
@@ -435,6 +480,7 @@ export class EvaluationService {
       await entityManager.softDelete(AgentEvaluation, { id: id });
       agentEvaluation.is_deleted = false
       agentEvaluation.deleted_at = null
+      agentEvaluation.deleted_by = null
       await entityManager.save(AgentEvaluation, agentEvaluation)
       await entityManager.queryRunner?.commitTransaction();
 

@@ -34,7 +34,7 @@ export class AppealService {
     private readonly datasource: DataSource,
   ) { }
 
-  async create(id: string, createAppealDto: CreateAppealDto) {
+  async create(id: string, createAppealDto: CreateAppealDto, user_id: string) {
     const queryRunner = this.datasource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -71,7 +71,9 @@ export class AppealService {
           throw new BadRequestException(`Audio evaluation with id ${audioEvalId} does not belong to agent evaluation with id ${id}.`)
         }
         const newAppeal = entityManager.create(Appeal, {
-          evaluation_per_audio: audioEvaluation
+          evaluation_per_audio: audioEvaluation,
+          created_by: user_id,
+          updated_at: null,
         })
         await entityManager.save(Appeal, newAppeal)
       }
@@ -195,7 +197,7 @@ export class AppealService {
   }
 
   // agent-evaluation id
-  async update(id: string, updateAppealDto: UpdateAppealDto) {
+  async update(id: string, updateAppealDto: UpdateAppealDto, user_id: string) {
     const queryRunner = this.datasource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -210,21 +212,20 @@ export class AppealService {
       if (!agentEvaluation) {
         throw new BadRequestException(`Agent evaluation with id ${id} not found. Unable to update appeal.`);
       }
-      console.log("agent evaluation: ", agentEvaluation);
 
       const appeals = agentEvaluation.eval_per_audio.map(audioEval => audioEval.appeal).filter(Boolean);
       if (appeals.length == 0) {
         throw new BadRequestException(`No appeals found under agent evaluation with id ${id}. Update operation is not permitted because there are no appeals to update.`)
       }
-      const existingAudioEvalId = agentEvaluation.eval_per_audio.map(audioEval => audioEval.id)
-      if (updateAppealDto.audio_evaluation_ids.some(audioEvalId => !existingAudioEvalId.includes(audioEvalId))) {
+      const existingAudioEvalId = new Set(agentEvaluation.eval_per_audio.map(audioEval => audioEval.id));
+      if (updateAppealDto.audio_evaluation_ids.some(audioEvalId => !existingAudioEvalId.has(audioEvalId))) {
         throw new BadRequestException(
           `One or more audio evaluation IDs provided in the update request do not exist under the agent evaluation with id ${id}. ` +
-          `Invalid audio evaluation IDs: ${updateAppealDto.audio_evaluation_ids.filter(audioEvalId => !existingAudioEvalId.includes(audioEvalId)).join(', ')}. ` +
+          `Invalid audio evaluation IDs: ${updateAppealDto.audio_evaluation_ids.filter(audioEvalId => !existingAudioEvalId.has(audioEvalId)).join(', ')}. ` +
           `Please ensure all audio evaluation IDs belong to the specified agent evaluation before updating the appeal.`
         );
       }
-      const existingAppealedAudioEvalId = (await entityManager.find(Appeal, {
+      const existingAudioEval = await entityManager.find(Appeal, {
         where: {
           evaluation_per_audio: {
             agent_evaluation: {
@@ -232,7 +233,8 @@ export class AppealService {
             }
           }
         }, relations: ['evaluation_per_audio', 'evaluation_per_audio.agent_evaluation']
-      })).map(appeal => appeal.evaluation_per_audio.id)
+      })
+      const existingAppealedAudioEvalId = existingAudioEval.map(appeal => appeal.evaluation_per_audio.id)
 
       const toBeAdded = updateAppealDto.audio_evaluation_ids.filter(audioEvalId => !existingAppealedAudioEvalId.includes(audioEvalId))
       const toBeDeleted = existingAppealedAudioEvalId.filter(appealedAudioId => !updateAppealDto.audio_evaluation_ids.includes(appealedAudioId))
@@ -250,6 +252,8 @@ export class AppealService {
         const newAppeal = entityManager.create(Appeal, {
           evaluation_per_audio: audioEval
         })
+        newAppeal.created_by = user_id
+        newAppeal.updated_at = null
         await entityManager.save(Appeal, newAppeal)
       }
 
@@ -317,7 +321,7 @@ export class AppealService {
     return agentEval;
   }
 
-  private async refreshIsAppealedEvaluation(agentEval: AgentEvaluation) {
+  async refreshIsAppealedEvaluation(agentEval: AgentEvaluation) {
     const queryRunner = this.datasource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -339,6 +343,7 @@ export class AppealService {
       const hasOpenAppeals = freshAgentEval.eval_per_audio.some(
         evalPerAudio => evalPerAudio.appeal != null && evalPerAudio.appeal.status !== appealStatus.CLOSED
       );
+      console.log("refreshing evaluation( is there appeal under this evaluation ?): ", hasOpenAppeals);
 
       freshAgentEval.is_appealed = hasOpenAppeals;
       await entityManager.save(AgentEvaluation, freshAgentEval);
@@ -374,7 +379,6 @@ export class AppealService {
       })
 
       const appealMap = agentEvaluation?.eval_per_audio?.map(evalPerAudio => evalPerAudio.appeal).filter(Boolean);
-      console.log(appealMap?.length);
 
       if (appealMap?.length === 0 && agentEvaluation) {
         const complainId = agentEvaluation.complain?.id
@@ -461,7 +465,7 @@ export class AppealService {
   }
 
   // performed by admin
-  async acceptAppeal(id: string) {
+  async acceptAppeal(id: string, user_id: string) {
     try {
       const { appeal } = await this.findOne(id)
       if (appeal.status !== appealStatus.DRAFT) {
@@ -470,6 +474,7 @@ export class AppealService {
 
       appeal.is_accepted = true
       appeal.status = appealStatus.UNDER_REVIEW
+      appeal.accepted_by = user_id
       await this.appealRepo.save(appeal)
 
       // produce kafka for notifing the evaluator
@@ -507,7 +512,7 @@ export class AppealService {
   }
 
   // should be performed by admin
-  async rejectAppeal(id: string, rejectionAppealDto: RejectionAppealDto) {
+  async rejectAppeal(id: string, rejectionAppealDto: RejectionAppealDto, user_id: string) {
     try {
       const { appeal } = await this.findOne(id)
       if (appeal.status !== appealStatus.DRAFT) {
@@ -516,9 +521,9 @@ export class AppealService {
       appeal.status = appealStatus.CLOSED
       appeal.is_rejected = true
       appeal.rejection_reason = rejectionAppealDto.rejection_reason
+      appeal.rejected_by = user_id
       await this.appealRepo.save(appeal)
 
-      // appeal.evaluation_per_audio.agent_evaluation.id
       const agentEval = await this.agentEvaluation.findOne({
         where: {
           id: appeal.evaluation_per_audio.agent_evaluation.id
@@ -526,8 +531,28 @@ export class AppealService {
       })
 
       if (agentEval) {
-        this.refreshIsAppealedEvaluation(agentEval)
+        const hasOpenAppeals = agentEval.eval_per_audio.some(
+          (audioEval) => audioEval.appeal && audioEval.appeal.status !== appealStatus.CLOSED,
+        );
+
+        // If there are no more open appeals, close the entire evaluation
+        if (!hasOpenAppeals) {
+          agentEval.status = agentEvalStatus.CLOSED;
+          await this.agentEvaluation.save(agentEval);
+        }
+
+        // Refresh the is_appealed flag, which will now be correctly set to false if needed
+        await this.refreshIsAppealedEvaluation(agentEval);
       }
+
+
+      // produce to audio service that the audio linked to this appeal is successfully closed
+      const message = {
+        audio_id: appeal.evaluation_per_audio.audio_id,
+        status: audioStatus.CLOSED
+      };
+      const { message: audioKafkaMessage } = this.evaluationService.UpdateAudioStatus(message);
+      console.log(audioKafkaMessage);
 
       // produce kafka for notifing the agent
       const notifyMessage = {
@@ -564,27 +589,14 @@ export class AppealService {
       appeal.status = appealStatus.CLOSED;
       await this.appealRepo.save(appeal);
 
-      // CRITICAL FIX: Load the agent evaluation with all its audio evaluations and their appeals
-      // The original code would have crashed here because `eval_per_audio` was not loaded.
-      const agentEval = await this.agentEvaluation.findOne({
-        where: { id: appeal.evaluation_per_audio.agent_evaluation.id },
-        relations: ['eval_per_audio', 'eval_per_audio.appeal'],
-      });
+      // produce to audio service that the audio linked to this appeal is successfully closed
+      const message = {
+        audio_id: appeal.evaluation_per_audio.audio_id,
+        status: audioStatus.CLOSED
+      };
 
-      if (agentEval) {
-        const hasOpenAppeals = agentEval.eval_per_audio.some(
-          (audioEval) => audioEval.appeal && audioEval.appeal.status !== appealStatus.CLOSED,
-        );
-
-        // If there are no more open appeals, close the entire evaluation
-        if (!hasOpenAppeals) {
-          agentEval.status = agentEvalStatus.CLOSED;
-          await this.agentEvaluation.save(agentEval);
-        }
-
-        // Refresh the is_appealed flag, which will now be correctly set to false if needed
-        await this.refreshIsAppealedEvaluation(agentEval);
-      }
+      const { message: audioKafkaMessage } = this.evaluationService.UpdateAudioStatus(message);
+      console.log(audioKafkaMessage);
 
       return {
         success: true,
@@ -625,7 +637,7 @@ export class AppealService {
       const agentEval = await entityManager.findOne(AgentEvaluation, {
         where: {
           id: id
-        }
+        }, relations: ['eval_per_audio']
       })
       if (!agentEval) {
         throw new NotFoundException(`Agent evaluation with id ${id} not found.`);
@@ -636,10 +648,13 @@ export class AppealService {
         const audioEvaluation = await entityManager.findOne(EvalPerAudio, {
           where: {
             id: audioEvalId
-          }, relations: ['agent_evaluation']
+          }, relations: ['agent_evaluation', 'appeal']
         })
         if (!audioEvaluation) {
           throw new NotFoundException(`Audio evaluation with id ${audioEvalId} not found.`);
+        }
+        if (audioEvaluation.appeal) {
+          throw new BadRequestException(`Audio evaluation ${audioEvaluation.id} cannot be confirmed because it has an active appeal (appeal id: ${audioEvaluation.appeal.id}, status: ${audioEvaluation.appeal.status}). Please resolve or close the appeal (via admin) before confirming this audio evaluation.`)
         }
         if (audioEvaluation.agent_evaluation.id !== agentEval.id) {
           throw new ConflictException(`Audio evaluation with id ${audioEvalId} does not belong to agent evaluation with id ${id}. Please ensure all audio evaluation IDs belong to the specified agent evaluation before confirming.`);
@@ -654,14 +669,24 @@ export class AppealService {
         }
         const { message: audioKafkaMessage } = this.evaluationService.UpdateAudioStatus(message)
         console.log(audioKafkaMessage);
-        console.log(message);
       }
+
+      await this.refreshIsAppealedEvaluation(agentEval)
+      const allAudioEvalIdsUnderThisAgentEval = agentEval.eval_per_audio.map(evalPerAudio => evalPerAudio.id).filter(Boolean);
+      const isThereNotConfirmedAudio = allAudioEvalIdsUnderThisAgentEval.some(agentAudioEvalId => !confirmDto.audio_evaluation_ids.includes(agentAudioEvalId))
+      if (!isThereNotConfirmedAudio) {
+        console.log(`All ${allAudioEvalIdsUnderThisAgentEval.length} audio evaluations for AgentEvaluation ${agentEval.id} have been confirmed. Confirmed IDs: ${confirmDto.audio_evaluation_ids.join(', ')}. The agent evaluation will be closed and its status set to CLOSED.`);
+        agentEval.status = agentEvalStatus.CLOSED
+        await entityManager.save(AgentEvaluation, agentEval)
+      }
+      await queryRunner.commitTransaction()
+
       return {
         success: true,
         message: "Audio evaluations have been successfully confirmed and their statuses updated to CLOSED.",
       }
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof ConflictException) {
+      if (error instanceof NotFoundException || error instanceof ConflictException || error instanceof BadRequestException) {
         throw error
       } else {
         console.error(error);

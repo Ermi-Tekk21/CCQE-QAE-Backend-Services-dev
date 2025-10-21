@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, BadRequestException, InternalServerErrorException, Headers } from '@nestjs/common';
 import { GroupQuestionService } from './group-question.service';
 import { CreateGroupQuestionDto } from './dto/group-question-dto/create-group-question.dto';
 import { UpdateGroupQuestionDto } from './dto/group-question-dto/update-group-question.dto';
@@ -12,8 +12,12 @@ export class GroupQuestionController {
   constructor(private readonly groupQuestionService: GroupQuestionService) { }
 
   @Post()
-  create(@Body() createGroupQuestionDto: CreateGroupQuestionDto) {
-    return this.groupQuestionService.create(createGroupQuestionDto);
+  create(
+    @Body() createGroupQuestionDto: CreateGroupQuestionDto,
+    @Headers('user_id') user_id: string
+
+  ) {
+    return this.groupQuestionService.create(createGroupQuestionDto, user_id);
   }
 
   @Post('force-close-active/:id')
@@ -26,7 +30,6 @@ export class GroupQuestionController {
       if (activeGroupQue.status == groupQuestionStatus.CLOSED) {
         throw new BadRequestException('Active group question is already closed.');
       }
-      console.log(activeGroupQue);
       return this.groupQuestionService.forceCloseGroupQuestion(activeGroupQue?.id as UUID)
     } catch (error) {
       if (error instanceof BadRequestException) {
@@ -44,6 +47,19 @@ export class GroupQuestionController {
     return this.groupQuestionService.findAll(page, limit, sort_order as 'asc' | 'desc');
   }
 
+  @Get(':id/questions')
+  findAllQuestionUnderSpecGroupQue(@Query() pagination: PaginationDto, @Param('id') id: string) {
+    const { page, limit, sort_order, catagory, search } = pagination;
+
+    return this.groupQuestionService.findAllQuestionUnderSpecGroupQue({
+      page,
+      limit,
+      catagory,
+      search,
+      sortOrder: sort_order as 'asc' | 'desc'
+    }, id);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.groupQuestionService.findOne(id);
@@ -59,13 +75,20 @@ export class GroupQuestionController {
   }
 
   @Patch('update/:id')
-  update(@Param('id') id: string, @Body() updateGroupQuestionDto: UpdateGroupQuestionDto) {
-    return this.groupQuestionService.update(id, updateGroupQuestionDto);
+  update(
+    @Param('id') id: string,
+    @Body() updateGroupQuestionDto: UpdateGroupQuestionDto,
+    @Headers('user_id') user_id: string
+  ) {
+    return this.groupQuestionService.update(id, updateGroupQuestionDto, user_id);
   }
 
   @Patch('publish/:id')
-  publish(@Param('id') id: string) {
-    return this.groupQuestionService.publish(id);
+  publish(
+    @Param('id') id: string,
+    @Headers('user_id') user_id: string
+  ) {
+    return this.groupQuestionService.publish(id, user_id);
   }
 
   @Patch('undo-publish/:id')
@@ -79,8 +102,11 @@ export class GroupQuestionController {
   }
 
   @Patch('temp-delete/:id')
-  softDelete(@Param('id') id: string) {
-    return this.groupQuestionService.softDelete(id);
+  softDelete(
+    @Param('id') id: string,
+    @Headers('user_id') user_id: string
+  ) {
+    return this.groupQuestionService.softDelete(id, user_id);
   }
 
   @Patch('restore-soft-delete/:id')
@@ -94,7 +120,10 @@ export class GroupQuestionController {
   }
 
   @Delete(':id/delete-question-or-ansOptions')
-  removeQuesOrAnsOp(@Param('id') id: string, @Body() deletQueOrAnsOpDto: DeletQueOrAnsOpDto) {
-    return this.groupQuestionService.deleteQueOrAnsOPs(id, deletQueOrAnsOpDto)
+  removeQuesOrAnsOp(
+    @Param('id') id: string,
+    @Body() deletQueOrAnsOpDto: DeletQueOrAnsOpDto,
+    @Headers('user_id') user_id: string) {
+    return this.groupQuestionService.deleteQueOrAnsOPs(id, deletQueOrAnsOpDto, user_id)
   }
 }

@@ -7,9 +7,6 @@ import { UpdateQuestionDto } from 'src/group-question/dto/question-dto/update-qu
 export class UpdateGroupQuestionDto extends PartialType(
     OmitType(CreateGroupQuestionDto, ['questions'])
 ) {
-    @IsUUID()
-    updated_by: string;
-
     @IsArray()
     @ValidateNested({ each: true })
     @Type(() => UpdateQuestionDto)

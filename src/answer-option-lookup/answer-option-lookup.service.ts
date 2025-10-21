@@ -13,13 +13,14 @@ export class AnswerOptionLookupService {
         private readonly answerOptionLookupRepo: Repository<AnswerOptionLookup>
     ) { }
 
-    async create(createAnswerOptionLookupDto: CreateAnswerOptionLookupDto) {
+    async create(createAnswerOptionLookupDto: CreateAnswerOptionLookupDto, user_id: string) {
         try {
             const doesExist = await this.answerOptionLookupRepo.findOne({ where: { content: createAnswerOptionLookupDto.content } })
             if (doesExist) {
                 throw new HttpException('duplicate entry, this answer option already created', 400)
             }
             const ansOP = this.answerOptionLookupRepo.create(createAnswerOptionLookupDto)
+            ansOP.created_by = user_id;
             ansOP.updated_at = null
             await this.answerOptionLookupRepo.save(ansOP)
             return {
@@ -71,12 +72,12 @@ export class AnswerOptionLookupService {
         }
     }
 
-    async update(id: string, updateAnswerOptionLookupDto: UpdateAnswerOptionLookupDto) {
+    async update(id: string, updateAnswerOptionLookupDto: UpdateAnswerOptionLookupDto, user_id: string) {
         try {
-            const { ['lookup answer option']: ansOP } = await this.findOne(id)
-            const updated = this.answerOptionLookupRepo.merge(ansOP, updateAnswerOptionLookupDto)
-
-            updated.updated_at = new Date()
+            const { ['lookup answer option']: ansOP } = await this.findOne(id);
+            const updated = this.answerOptionLookupRepo.merge(ansOP, updateAnswerOptionLookupDto);
+            updated.updated_by = user_id;
+            updated.updated_at = new Date();
 
             await this.answerOptionLookupRepo.save(updated)
 
@@ -96,12 +97,13 @@ export class AnswerOptionLookupService {
     }
 
 
-    async softDelete(id: string) {
+    async softDelete(id: string, user_id: string) {
         try {
             const { ['lookup answer option']: ansOP } = await this.findOne(id);
 
             await this.answerOptionLookupRepo.softDelete(id)
             ansOP.is_deleted = true;
+            ansOP.deleted_by = user_id;
             ansOP.deleted_at = new Date();
 
             await this.answerOptionLookupRepo.save(ansOP);
@@ -131,8 +133,9 @@ export class AnswerOptionLookupService {
             }
 
             await this.answerOptionLookupRepo.restore(id)
-            ansOP.is_deleted = false
-            ansOP.deleted_at = null
+            ansOP.is_deleted = false;
+            ansOP.deleted_at = null;
+            ansOP.deleted_by = null;
             await this.answerOptionLookupRepo.save(ansOP)
             return {
                 success: true,

@@ -9,13 +9,14 @@ export async function paginate<T extends ObjectLiteral>(
     const skip = (page - 1) * limit;
 
     let queryBuilder: SelectQueryBuilder<T>;
-    const alias = 'entity';
 
     if (repositoryOrQueryBuilder instanceof Repository) {
-        queryBuilder = repositoryOrQueryBuilder.createQueryBuilder(alias);
+        queryBuilder = repositoryOrQueryBuilder.createQueryBuilder('entity');
     } else {
         queryBuilder = repositoryOrQueryBuilder;
     }
+
+    const alias = queryBuilder.expressionMap.mainAlias!.name;
 
     if (options?.where) {
         queryBuilder.where(options.where);
@@ -23,12 +24,12 @@ export async function paginate<T extends ObjectLiteral>(
 
     if (options?.relations) {
         const relations = Array.isArray(options.relations) ? options.relations : Object.keys(options.relations);
-        relations.forEach(relation => {
+        for (const relation of relations) {
             const relationParts = relation.split('.');
             let currentAlias = alias;
             let propertyPath = '';
 
-            relationParts.forEach((part, index) => {
+            for (const [index, part] of relationParts.entries()) {
                 propertyPath += (index === 0 ? '' : '.') + part;
                 const newAlias = `${currentAlias}_${part}`;
                 const existingJoin = queryBuilder.expressionMap.joinAttributes.find(
@@ -39,15 +40,15 @@ export async function paginate<T extends ObjectLiteral>(
                     queryBuilder.leftJoinAndSelect(`${currentAlias}.${part}`, newAlias);
                 }
                 currentAlias = newAlias;
-            });
-        });
+            }
+        }
     }
 
     if (options?.order) {
         const order = options.order as { [key: string]: 'asc' | 'desc' };
-        Object.keys(order).forEach(key => {
+        for (const key of Object.keys(order)) {
             queryBuilder.addOrderBy(`${alias}.${key}`, order[key].toUpperCase() as 'ASC' | 'DESC');
-        });
+        }
     }
 
     const [data, total] = await queryBuilder

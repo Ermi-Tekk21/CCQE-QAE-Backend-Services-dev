@@ -17,7 +17,7 @@ export class CatagoryService {
     private readonly questionLookupRepo: Repository<QuestionLookup>
   ) { }
 
-  async create(createCatagoryDto: CreateCatagoryDto) {
+  async create(createCatagoryDto: CreateCatagoryDto, user_id) {
     try {
       const doesExist = await this.catagoryRepo.findOne({ where: { name: createCatagoryDto.name } })
       if (doesExist) {
@@ -25,6 +25,7 @@ export class CatagoryService {
       }
       const catagory = this.catagoryRepo.create(createCatagoryDto)
       catagory.updated_at = null
+      catagory.created_by = user_id
       await this.catagoryRepo.save(catagory)
       return {
         success: true,
@@ -99,13 +100,13 @@ export class CatagoryService {
     };
   }
 
-  async update(id: string, updateCatagoryDto: UpdateCatagoryDto) {
+  async update(id: string, updateCatagoryDto: UpdateCatagoryDto, user_id: string) {
     try {
       const { catagory } = await this.findOne(id)
       const updated = this.catagoryRepo.merge(catagory, updateCatagoryDto)
 
       updated.updated_at = new Date()
-
+      updated.updated_by = user_id;
       await this.catagoryRepo.save(updated);
 
       return {
@@ -124,14 +125,14 @@ export class CatagoryService {
     }
   }
 
-  async softDelete(id: string) {
+  async softDelete(id: string, user_id: string) {
     try {
       const { catagory } = await this.findOne(id);
 
       await this.catagoryRepo.softDelete(id)
       catagory.is_deleted = true
       catagory.deleted_at = new Date()
-
+      catagory.deleted_by = user_id;
       await this.catagoryRepo.save(catagory);
 
       return {
@@ -160,6 +161,7 @@ export class CatagoryService {
       await this.catagoryRepo.restore(id);
       catagory.is_deleted = false
       catagory.deleted_at = null
+      catagory.deleted_by = null
       await this.catagoryRepo.save(catagory)
 
       return {
