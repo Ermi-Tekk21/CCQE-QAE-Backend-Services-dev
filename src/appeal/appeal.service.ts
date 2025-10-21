@@ -34,7 +34,7 @@ export class AppealService {
     private readonly datasource: DataSource,
   ) { }
 
-  async create(id: string, createAppealDto: CreateAppealDto) {
+  async create(id: string, createAppealDto: CreateAppealDto, user_id: string) {
     const queryRunner = this.datasource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -71,7 +71,9 @@ export class AppealService {
           throw new BadRequestException(`Audio evaluation with id ${audioEvalId} does not belong to agent evaluation with id ${id}.`)
         }
         const newAppeal = entityManager.create(Appeal, {
-          evaluation_per_audio: audioEvaluation
+          evaluation_per_audio: audioEvaluation,
+          created_by: user_id,
+          updated_at: null,
         })
         await entityManager.save(Appeal, newAppeal)
       }
@@ -195,7 +197,7 @@ export class AppealService {
   }
 
   // agent-evaluation id
-  async update(id: string, updateAppealDto: UpdateAppealDto) {
+  async update(id: string, updateAppealDto: UpdateAppealDto, user_id: string) {
     const queryRunner = this.datasource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -250,6 +252,8 @@ export class AppealService {
         const newAppeal = entityManager.create(Appeal, {
           evaluation_per_audio: audioEval
         })
+        newAppeal.created_by = user_id
+        newAppeal.updated_at = null
         await entityManager.save(Appeal, newAppeal)
       }
 
@@ -461,7 +465,7 @@ export class AppealService {
   }
 
   // performed by admin
-  async acceptAppeal(id: string) {
+  async acceptAppeal(id: string, user_id: string) {
     try {
       const { appeal } = await this.findOne(id)
       if (appeal.status !== appealStatus.DRAFT) {
@@ -470,6 +474,7 @@ export class AppealService {
 
       appeal.is_accepted = true
       appeal.status = appealStatus.UNDER_REVIEW
+      appeal.accepted_by = user_id
       await this.appealRepo.save(appeal)
 
       // produce kafka for notifing the evaluator
@@ -507,7 +512,7 @@ export class AppealService {
   }
 
   // should be performed by admin
-  async rejectAppeal(id: string, rejectionAppealDto: RejectionAppealDto) {
+  async rejectAppeal(id: string, rejectionAppealDto: RejectionAppealDto, user_id: string) {
     try {
       const { appeal } = await this.findOne(id)
       if (appeal.status !== appealStatus.DRAFT) {
@@ -516,6 +521,7 @@ export class AppealService {
       appeal.status = appealStatus.CLOSED
       appeal.is_rejected = true
       appeal.rejection_reason = rejectionAppealDto.rejection_reason
+      appeal.rejected_by = user_id
       await this.appealRepo.save(appeal)
 
       const agentEval = await this.agentEvaluation.findOne({
