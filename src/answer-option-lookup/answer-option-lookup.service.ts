@@ -3,7 +3,7 @@ import { CreateAnswerOptionLookupDto } from './dto/create-answer-option-lookup.d
 import { UpdateAnswerOptionLookupDto } from './dto/update-answer-option-lookup.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { AnswerOptionLookup } from './entities/answer-option-lookup.entity';
-import { Repository } from 'typeorm';
+import { ILike, Repository } from 'typeorm';
 import { paginate } from 'src/utils/paginate';
 
 @Injectable()
@@ -39,10 +39,30 @@ export class AnswerOptionLookupService {
         }
     }
 
-    async findAll(page: number, limit: number, sortOrder: 'asc' | 'desc' = 'desc') {
+    async findAll(params: {
+        page: number,
+        limit: number,
+        search: string,
+        sortOrder: 'asc' | 'desc'
+    }) {
+        const {
+            page,
+            limit,
+            sortOrder = 'desc',
+            search
+        } = params;
+
+        const baseConditions: any = {};
+        let where: any = baseConditions;
+
+        if (search) {
+            where = { ...baseConditions, content: ILike(`%${search}%`) };
+        }
+
         const paginatedAnsOPs = await paginate(this.answerOptionLookupRepo, page, limit, {
-            order: { created_at: sortOrder }
-        })
+            order: { created_at: sortOrder },
+            where,
+        });
         return {
             success: true,
             "lookup answer options": paginatedAnsOPs.data,
