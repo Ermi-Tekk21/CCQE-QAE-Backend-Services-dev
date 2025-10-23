@@ -8,7 +8,7 @@ import { groupQuestionStatus } from './common/group_question.status';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.enableCors({
-    origin: ['http://localhost:3000', 'http://164.160.187.141:9011'],
+    origin: ['http://localhost:3000', 'http://164.160.187.141:9011','http://51.20.140.67:9011'],
     credentials: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     allowedHeaders: 'Content-Type, Accept, Authorization',
