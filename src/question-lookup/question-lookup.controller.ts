@@ -1,0 +1,62 @@
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, Headers } from '@nestjs/common';
+import { QuestionLookupService } from './question-lookup.service';
+import { CreateQuestionLookupDto } from './dto/create-question-lookup.dto';
+import { UpdateQuestionLookupDto } from './dto/update-question-lookup.dto';
+import { PaginationDto } from 'src/common/dto/pagination.dto';
+
+@Controller('question-lookup')
+export class QuestionLookupController {
+    constructor(private readonly questionLookupService: QuestionLookupService) { }
+
+    @Post()
+    create(
+        @Body() createQuestionLookupDto: CreateQuestionLookupDto,
+        @Headers('user_id') user_id: string
+    ) {
+        return this.questionLookupService.create(createQuestionLookupDto, user_id);
+    }
+
+    @Get('fetch-all')
+    findAll(@Query() pagination: PaginationDto) {
+        const { page, limit, sort_order, catagory, search } = pagination;
+
+        return this.questionLookupService.findAll({
+            page,
+            limit,
+            catagory,
+            search,
+            sortOrder: sort_order as 'asc' | 'desc'
+        });
+    }
+
+    @Get(':id')
+    findOne(@Param('id') id: string) {
+        return this.questionLookupService.findOne(id);
+    }
+
+    @Patch(':id')
+    update(
+        @Param('id') id: string, @Body() updateQuestionLookupDto: UpdateQuestionLookupDto,
+        @Headers('user_id') user_id: string
+    ) {
+        return this.questionLookupService.update(id, updateQuestionLookupDto, user_id);
+    }
+
+    @Patch('temp-delete/:id')
+    softDelete(
+        @Param('id') id: string,
+        @Headers('user_id') user_id: string
+    ) {
+        return this.questionLookupService.softDelete(id, user_id);
+    }
+
+    @Patch('restore-temp-delete/:id')
+    restoreSoftDelete(@Param('id') id: string) {
+        return this.questionLookupService.restoreSoftDelete(id);
+    }
+
+    @Delete(':id')
+    remove(@Param('id') id: string) {
+        return this.questionLookupService.remove(id);
+    }
+}
